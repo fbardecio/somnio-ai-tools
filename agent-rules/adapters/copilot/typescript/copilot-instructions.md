@@ -2,6 +2,9 @@
 
 Follow these standards in all code suggestions.
 
+### TypeScript conventions — naming, types, async/await, error handling, logging. Applies to all .ts files (Functions, scripts, utilities).
+> Applies to: `**/*.ts`
+
 ### General guidelines for TypeScript code in this repo.
 # TypeScript Best Practices
 

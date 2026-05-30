@@ -1,3 +1,5 @@
+### Firebase Functions testing — Jest + ts-jest, Firebase SDK mocks, requireAuth and Express route tests.
+> Applies to: `functions/tests/**/*.test.ts`
 > Applies to: `functions/tests/**/*.test.ts`
 # Firebase Functions — Testing
 

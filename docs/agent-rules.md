@@ -77,8 +77,10 @@ somnio rules status                           # check what is installed
 | `architecture` | Layered architecture: Data, Repository, BLoC, Presentation |
 | `best-practices` | General best practices: SOLID, state, navigation, theming |
 | `bloc-test` | BLoC test structure and patterns |
+| `code-patterns` | Dart/Flutter implementation patterns: null safety, async, const, routing, serialization |
+| `layout` | Layout patterns: Row/Column, Stack, Overlay, scrolling, LayoutBuilder |
 | `testing` | Testing best practices: mocking, matchers, grouping |
-| `dart-model-from-json` | JSON model generation with json_serializable and equatable |
+| `ui-theming` | UI theming, Material 3, ThemeData, ColorScheme, ThemeExtension, accessibility |
 
 ### React
 

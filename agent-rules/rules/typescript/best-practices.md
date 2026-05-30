@@ -1,3 +1,9 @@
+---
+description: TypeScript conventions — naming, types, async/await, error handling, logging. Applies to all .ts files (Functions, scripts, utilities).
+globs: **/*.ts
+alwaysApply: false
+---
+
 ### General guidelines for TypeScript code in this repo.
 # TypeScript Best Practices
 

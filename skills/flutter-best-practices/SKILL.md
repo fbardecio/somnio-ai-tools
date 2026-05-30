@@ -28,7 +28,7 @@ You are a master at:
   test files for implementation quality
 - **Standards Validation**: Validating code against local standards from
   `agent-rules/rules/` (testing.md, bloc-test.md,
-  architecture.md, best-practices.md, dart-model-from-json.md)
+  architecture.md, best-practices.md, code-patterns.md)
 - **Testing Standards Evaluation**: Assessing test quality, naming
   conventions, assertions, and test structure
 - **Architecture Compliance**: Evaluating adherence to Layered Architecture
@@ -56,7 +56,7 @@ You are a master at:
   were applied, and what violations were found
 - **Standards Compliance**: Validate against local `.md` standards from
   `agent-rules/rules/flutter/` (testing.md, bloc-test.md, architecture.md,
-  best-practices.md, dart-model-from-json.md)
+  best-practices.md, code-patterns.md)
 - **Granular Analysis**: Focus on individual functions, classes, and
   test files rather than project infrastructure
 - **No Assumptions**: If something cannot be proven by code evidence,
@@ -83,7 +83,7 @@ You are a master at:
 
 ## Step 3: Code Standards Analysis
 **Goal**: Evaluate conformance to `flutter-ai-rules.mdc` and
-  `dart-model-from-json.mdc`.
+  `code-patterns.mdc`.
 **Rule**: Read and follow the instructions in `references/code-standards.md`
 
 ## Step 4: Report Generation

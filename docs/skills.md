@@ -351,4 +351,22 @@ feat(flutter): upgrade Flutter SDK to v3.19
 
 ---
 
+## Dart Model from JSON
+
+Generates Dart model classes from a JSON structure using `json_annotation` and `equatable`. Handles nested objects, arrays, nullable fields, and default values. Each nested object becomes a separate class. Includes `copyWith`, `fromJson`, `toJson`, and `props`.
+
+**Use when:**
+- You have a JSON API response and need the Dart model classes for it
+- You want consistent model generation following project conventions
+- You need to quickly scaffold multiple nested model classes
+
+**Example prompt:**
+```
+Generate Dart models for this JSON: { "id": "123", "name": "John", "address": { "city": "NY" } }
+```
+
+**Output:** Dart class definitions (one per nested object) ready to paste into your project files
+
+---
+
 **See also:** [Installation](installation.md) | [CLI Reference](cli.md) | [Workflow Guide](workflows.md)

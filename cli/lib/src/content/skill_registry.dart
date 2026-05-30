@@ -209,6 +209,17 @@ class SkillRegistry {
       planRelativePath:
           'skills/ship/SKILL.md',
     ),
+    WorkflowSkill(
+      id: 'dart_model_from_json',
+      name: 'dart-model-from-json',
+      displayName: 'Dart Model from JSON',
+      description:
+          'Generates Dart model classes from a JSON structure using '
+          'json_annotation and equatable. Includes copyWith, fromJson, '
+          'toJson, and Equatable props. Handles nested objects and arrays.',
+      planRelativePath:
+          'skills/dart-model-from-json/SKILL.md',
+    ),
   ];
 
   /// Find a skill bundle by its ID.

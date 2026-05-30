@@ -1,3 +1,9 @@
+---
+description: Firebase Cloud Functions v2 architecture — module structure, handler registration, Express, secrets, error handling, Firestore.
+globs: functions/**/*.ts
+alwaysApply: false
+---
+
 > Applies to: `functions/**/*.ts`
 # Firebase Cloud Functions — Architecture
 

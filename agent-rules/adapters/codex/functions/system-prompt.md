@@ -2,6 +2,9 @@
 
 You are an expert software engineer. Follow these coding standards precisely when generating code.
 
+### Firebase Cloud Functions v2 architecture — module structure, handler registration, Express, secrets, error handling, Firestore.
+> Applies to: `functions/**/*.ts`
+
 > Applies to: `functions/**/*.ts`
 # Firebase Cloud Functions — Architecture
 
@@ -197,6 +200,9 @@ Never log:
     hardcode.
 
 ---
+
+### Firebase Functions testing — Jest + ts-jest, Firebase SDK mocks, requireAuth and Express route tests.
+> Applies to: `functions/tests/**/*.test.ts`
 
 > Applies to: `functions/tests/**/*.test.ts`
 # Firebase Functions — Testing

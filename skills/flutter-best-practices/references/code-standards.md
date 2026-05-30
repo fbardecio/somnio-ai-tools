@@ -8,7 +8,7 @@ Goal: Analyze the Flutter codebase for specific code standards, model
 best practices, and error handling.
 
 STANDARDS SOURCE (local):
-- `agent-rules/rules/flutter/dart-model-from-json.md`
+- `agent-rules/rules/flutter/code-patterns.md`
 - `agent-rules/rules/flutter/best-practices.md`
 
 To resolve the absolute path: find the directory containing
