@@ -7,7 +7,7 @@ import 'agent_rule.dart';
 ///
 /// Adding support for a new agent requires only a new [AgentRule] entry here.
 class AgentRuleRegistry {
-  AgentRuleRegistry._();
+  AgentRuleRegistry._(); // coverage:ignore-line
 
   /// Stacks exposed by every adapter — must match subfolder names under
   /// `agent-rules/rules/` and the per-stack subfolders the generator emits

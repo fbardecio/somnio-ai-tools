@@ -69,6 +69,7 @@ security_analysis_prompt.txt
 cli/.dart_tool/
 cli/pubspec.lock
 cli/.packages
+cli/coverage/
 
 # Agent rules generated outputs (regenerate with: cd agent-rules && npm run generate)
 agent-rules/adapters/claude/*/CLAUDE.md

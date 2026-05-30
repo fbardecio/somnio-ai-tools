@@ -1,3 +1,4 @@
+// coverage:ignore-file
 import '../agents/agent_config.dart';
 
 /// Supported AI CLI agents for chunked execution.

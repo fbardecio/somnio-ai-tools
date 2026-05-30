@@ -1,3 +1,4 @@
+// coverage:ignore-file
 import 'dart:io' as io;
 
 import 'package:interact_cli/interact_cli.dart';

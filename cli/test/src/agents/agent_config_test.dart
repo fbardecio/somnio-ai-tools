@@ -118,6 +118,121 @@ void main() {
       expect(args, ['--print', '--model', 'auto', 'prompt']);
     });
 
+    test('flag style omits prompt when promptFlag is null', () {
+      const agent = AgentConfig(
+        id: 'noflag',
+        displayName: 'No Flag',
+        promptStyle: PromptStyle.flag,
+        outputFlags: ['--json'],
+        installPath: '{home}/.noflag',
+      );
+      final args = agent.buildArgs('ignored prompt', model: 'm');
+      expect(args, ['--json', '--model', 'm']);
+      expect(args, isNot(contains('ignored prompt')));
+    });
+
+    test('subcommand style omits subcommand flag when promptFlag is null', () {
+      const agent = AgentConfig(
+        id: 'sub',
+        displayName: 'Sub',
+        promptStyle: PromptStyle.subcommand,
+        outputFlags: ['--json'],
+        installPath: '{home}/.sub',
+      );
+      final args = agent.buildArgs('the prompt');
+      expect(args, ['--json', 'the prompt']);
+    });
+  });
+
+  group('AgentConfig.contentLabel', () {
+    test('returns "workflow" for InstallFormat.workflow', () {
+      const agent = AgentConfig(
+        id: 'antigravity',
+        displayName: 'Antigravity',
+        installFormat: InstallFormat.workflow,
+        installPath: '{home}/.gemini/antigravity',
+      );
+      expect(agent.contentLabel, 'workflow');
+    });
+
+    test('returns "command" for InstallFormat.singleFile', () {
+      const agent = AgentConfig(
+        id: 'cursor',
+        displayName: 'Cursor',
+        installFormat: InstallFormat.singleFile,
+        installPath: '{home}/.cursor/commands',
+      );
+      expect(agent.contentLabel, 'command');
+    });
+
+    test('returns "skill" for other install formats', () {
+      const skillDir = AgentConfig(
+        id: 'claude',
+        displayName: 'Claude',
+        installFormat: InstallFormat.skillDir,
+        installPath: '{home}/.claude/skills',
+      );
+      const markdown = AgentConfig(
+        id: 'copilot',
+        displayName: 'Copilot',
+        installFormat: InstallFormat.markdown,
+        installPath: '{home}/.copilot/agents',
+      );
+      expect(skillDir.contentLabel, 'skill');
+      expect(markdown.contentLabel, 'skill');
+    });
+  });
+
+  group('AgentConfig.resolvedExecutionRulesPath', () {
+    test('falls back to installPath when executionRulesPath is null', () {
+      const agent = AgentConfig(
+        id: 'claude',
+        displayName: 'Claude',
+        installPath: '{home}/.claude/skills',
+      );
+      final path = agent.resolvedExecutionRulesPath(home: '/home/u');
+      expect(path, '/home/u/.claude/skills');
+    });
+
+    test('uses executionRulesPath and substitutes {home}', () {
+      const agent = AgentConfig(
+        id: 'cursor',
+        displayName: 'Cursor',
+        installPath: '{home}/.cursor/commands',
+        executionRulesPath: '{home}/.cursor/somnio_rules',
+      );
+      final path = agent.resolvedExecutionRulesPath(home: '/Users/u');
+      expect(path, endsWith('/.cursor/somnio_rules'));
+      expect(path, contains('/Users/u/'));
+      expect(path, isNot(contains('{home}')));
+    });
+
+    test('substitutes {name} when provided', () {
+      const agent = AgentConfig(
+        id: 'cursor',
+        displayName: 'Cursor',
+        installPath: '{home}/.cursor/commands',
+        executionRulesPath: '{home}/.cursor/somnio_rules/{name}',
+      );
+      final path = agent.resolvedExecutionRulesPath(
+        home: '/Users/u',
+        name: 'flutter-audit',
+      );
+      expect(path, endsWith('/somnio_rules/flutter-audit'));
+      expect(path, isNot(contains('{name}')));
+    });
+
+    test('leaves {name} unsubstituted when name is null', () {
+      const agent = AgentConfig(
+        id: 'cursor',
+        displayName: 'Cursor',
+        installPath: '{home}/.cursor/commands',
+        executionRulesPath: '{home}/.cursor/somnio_rules/{name}',
+      );
+      final path = agent.resolvedExecutionRulesPath(home: '/Users/u');
+      expect(path, contains('{name}'));
+    });
+
     test('claude buildArgs matches original implementation', () {
       const agent = AgentConfig(
         id: 'claude',

@@ -57,6 +57,25 @@ void main() {
           AgentRegistry.agents.length);
     });
 
+    test('ideAgents only includes non-executable agents', () {
+      final ide = AgentRegistry.ideAgents;
+      expect(ide, isNotEmpty);
+      for (final agent in ide) {
+        expect(agent.canExecute, isFalse,
+            reason: '${agent.id} should not be executable');
+      }
+      final ids = ide.map((a) => a.id).toSet();
+      expect(ids, containsAll(['copilot', 'windsurf', 'roo']));
+      expect(ids, isNot(contains('claude')));
+    });
+
+    test('executableAgents and ideAgents partition the full registry', () {
+      expect(
+        AgentRegistry.executableAgents.length + AgentRegistry.ideAgents.length,
+        AgentRegistry.agents.length,
+      );
+    });
+
     test('all executable agents have a binary', () {
       for (final agent in AgentRegistry.executableAgents) {
         expect(agent.binary, isNotNull,

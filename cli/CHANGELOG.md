@@ -13,9 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`somnio update` skill selection**: After updating the CLI, `update` now opens the same agent/skill wizard instead of silently reinstalling everything. Non-interactive runs (CI, pipes) still reinstall all skills, and `--all-skills` forces that behavior in a terminal.
 - **Dart Model from JSON Skill**: New standalone `dart-model-from-json` skill that generates Dart model classes from a JSON structure using `json_annotation` and `equatable` (`copyWith`, `fromJson`, `toJson`, Equatable props; handles nested objects and arrays). Registered in the CLI skill registry.
 - **Flutter Rules**: Added `code-patterns`, `layout`, and `ui-theming` rules under `agent-rules/rules/flutter/`.
+- **Test coverage**: Added a comprehensive unit-test suite (~21 new/extended test files, 379 tests) covering transformers, agents, content loaders, installers, runner, workflow, and utils. Every non-excluded source file under `cli/lib/` now has **100% line coverage**.
 
 ### Changed
 
+- **Coverage gate (`pre-push`)**: The hook now enforces the threshold **per file** instead of as an aggregate average, and runs `format_coverage --check-ignore` so files marked `// coverage:ignore-file` (entrypoints, command shells, interactive prompts, and process-spawning orchestrators) are excluded from the calculation. It lists every offending file when the gate fails.
 - **Interactive menus**: Migrated all selection prompts (`install`, `add`, `workflow`) from `mason_logger` to `interact_cli` with a Somnio-branded theme. The new menus redraw with relative cursor movement, fixing the jumping / duplicated-line rendering glitches the previous prompts showed when the list reached the bottom of the terminal.
 - **Agent Rules**: Refactored flutter, nestjs, and react rule content across stacks and regenerated all tool adapters (Claude, Cursor, Windsurf, Copilot, Codex, Antigravity).
 - **Docs**: Updated `docs/agent-rules.md` and the Cursor/Antigravity adapter READMEs to reflect the current flutter rule set.

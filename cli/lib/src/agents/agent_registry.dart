@@ -6,7 +6,7 @@ import 'token_parsers.dart';
 /// Adding a new agent requires only a single [AgentConfig] entry here.
 /// No other files need to change.
 class AgentRegistry {
-  AgentRegistry._();
+  AgentRegistry._(); // coverage:ignore-line
 
   /// All registered agents.
   static const List<AgentConfig> agents = [

@@ -6,7 +6,7 @@ import 'workflow_skill.dart';
 /// Each bundle maps to a set of source files in `skills/` and defines
 /// how they are installed into each agent.
 class SkillRegistry {
-  SkillRegistry._();
+  SkillRegistry._(); // coverage:ignore-line
 
   /// All registered skill bundles.
   static const List<SkillBundle> skills = [
