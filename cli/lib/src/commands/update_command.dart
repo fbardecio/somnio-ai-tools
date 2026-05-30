@@ -7,9 +7,11 @@ import 'package:path/path.dart' as p;
 import '../agents/agent_config.dart';
 import '../content/skill_registry.dart';
 import '../installers/agent_installer.dart';
+import '../installers/interactive_install.dart';
 import '../utils/agent_detector.dart';
 import '../utils/command_helpers.dart';
 import '../utils/platform_utils.dart';
+import '../utils/prompts.dart';
 
 /// Updates the CLI and reinstalls all skills.
 ///
@@ -22,6 +24,10 @@ class UpdateCommand extends Command<int> {
       ..addFlag(
         'legacy',
         help: 'Use built-in installer instead of skills.sh.',
+      )
+      ..addFlag(
+        'all-skills',
+        help: 'Reinstall every skill without prompting for a selection.',
       )
       ..addFlag(
         'verbose',
@@ -99,6 +105,7 @@ class UpdateCommand extends Command<int> {
   @override
   Future<int> run() async {
     final useLegacy = argResults!['legacy'] as bool;
+    final allSkills = argResults!['all-skills'] as bool;
     final verbose = argResults!['verbose'] as bool;
 
     // ── Step 1: Update CLI from git ───────────────────────────────
@@ -142,7 +149,15 @@ class UpdateCommand extends Command<int> {
     }
     _logger.info('');
 
-    // ── Step 3: Reinstall via skills.sh or legacy ─────────────────
+    // ── Step 3: Reinstall ─────────────────────────────────────────
+    // Interactive terminal → let the user pick which agents and skills to
+    // reinstall (same wizard as `somnio install`). Non-interactive (CI,
+    // pipes) → reinstall everything so automation never hangs. `--all-skills`
+    // forces the install-everything path even in a terminal.
+    if (Prompts.isInteractive && !allSkills) {
+      return _reinstallInteractive();
+    }
+
     if (useLegacy) {
       _logger.info(
         '${lightCyan.wrap('Installing')}  Using built-in installer...',
@@ -152,6 +167,33 @@ class UpdateCommand extends Command<int> {
     }
 
     return _installViaSkillsSh(verbose: verbose);
+  }
+
+  /// Reinstalls skills through the interactive wizard (agents + skills).
+  Future<int> _reinstallInteractive() async {
+    final flow = InteractiveInstall(_logger);
+
+    final agents = await flow.promptForAgents();
+    if (agents.isEmpty) {
+      _logger.info('No agents selected.');
+      return ExitCode.success.code;
+    }
+
+    final selection = flow.promptForSkills();
+    if (selection.isEmpty) {
+      _logger.info('No skills selected.');
+      return ExitCode.success.code;
+    }
+
+    final content = await CommandHelpers.resolveContent();
+    final code = await flow.installToAgents(agents, content.loader, selection);
+
+    _logger.info('');
+    _logger.success('Update complete!');
+    _logger.info('');
+    CommandHelpers.printNextSteps(_logger);
+
+    return code;
   }
 
   /// Cleans up all Somnio skill files across all agents.

@@ -3,13 +3,11 @@ import 'package:mason_logger/mason_logger.dart';
 
 import '../agents/agent_config.dart';
 import '../agents/agent_registry.dart';
-import '../content/content_loader.dart';
 import '../content/skill_bundle.dart';
 import '../content/skill_registry.dart';
 import '../content/workflow_skill.dart';
-import '../installers/agent_installer.dart';
+import '../installers/interactive_install.dart';
 import '../utils/command_helpers.dart';
-import '../utils/platform_utils.dart';
 import '../utils/prompts.dart';
 
 /// Installs skills to a specific agent or all detected agents.
@@ -70,8 +68,10 @@ class InstallCommand extends Command<int> {
       return ExitCode.software.code;
     }
 
+    final flow = InteractiveInstall(_logger);
+
     // 1. Resolve which agents to install to.
-    final agents = await _resolveAgents();
+    final agents = await _resolveAgents(flow);
     if (agents == null) return ExitCode.usage.code;
     if (agents.isEmpty) {
       _logger.info('No agents selected.');
@@ -79,7 +79,7 @@ class InstallCommand extends Command<int> {
     }
 
     // 2. Resolve which skills to install.
-    final selection = _resolveSkills();
+    final selection = _resolveSkills(flow);
     if (selection == null) return ExitCode.usage.code;
     if (selection.isEmpty) {
       _logger.info('No skills selected.');
@@ -87,7 +87,12 @@ class InstallCommand extends Command<int> {
     }
 
     // 3. Install the selected skills to each selected agent.
-    return _installToAgents(agents, content.loader, selection, force);
+    return flow.installToAgents(
+      agents,
+      content.loader,
+      selection,
+      force: force,
+    );
   }
 
   // ──────────────────────────────────────────────────────────────────
@@ -95,12 +100,12 @@ class InstallCommand extends Command<int> {
   // ──────────────────────────────────────────────────────────────────
 
   /// Returns the agents to install to, or `null` on a usage error.
-  Future<List<AgentConfig>?> _resolveAgents() async {
+  Future<List<AgentConfig>?> _resolveAgents(InteractiveInstall flow) async {
     final agentId = argResults!['agent'] as String?;
     final installAll = argResults!['all'] as bool;
 
     if (installAll) {
-      return _detectedAgents();
+      return flow.detectedAgents();
     }
 
     if (agentId != null) {
@@ -123,53 +128,7 @@ class InstallCommand extends Command<int> {
       return null;
     }
 
-    return _promptForAgents();
-  }
-
-  /// Detected installable agents (binary present, or IDE agents with no
-  /// binary requirement). Mirrors the previous `--all` behavior.
-  Future<List<AgentConfig>> _detectedAgents() async {
-    final detected = <AgentConfig>[];
-    for (final agent in AgentRegistry.installableAgents) {
-      if (agent.binary != null) {
-        final path = await PlatformUtils.whichBinary(agent.binary!);
-        if (path == null) continue;
-      }
-      detected.add(agent);
-    }
-    return detected;
-  }
-
-  /// Interactive multi-select over all installable agents, pre-selecting
-  /// the ones detected on this machine.
-  Future<List<AgentConfig>> _promptForAgents() async {
-    final agents = AgentRegistry.installableAgents;
-
-    // Pre-compute detection so we can pre-check detected CLI agents.
-    final detectedIds = <String>{};
-    for (final agent in agents) {
-      if (agent.binary == null) continue;
-      final path = await PlatformUtils.whichBinary(agent.binary!);
-      if (path != null) detectedIds.add(agent.id);
-    }
-
-    final options = agents
-        .map(
-          (a) => detectedIds.contains(a.id)
-              ? '${a.displayName} (detected)'
-              : a.displayName,
-        )
-        .toList();
-    final defaults =
-        agents.map((a) => detectedIds.contains(a.id)).toList();
-
-    final indexes = Prompts.selectMany(
-      prompt: 'Select agents to install to',
-      options: options,
-      defaults: defaults,
-    );
-
-    return indexes.map((i) => agents[i]).toList();
+    return flow.promptForAgents();
   }
 
   // ──────────────────────────────────────────────────────────────────
@@ -177,15 +136,12 @@ class InstallCommand extends Command<int> {
   // ──────────────────────────────────────────────────────────────────
 
   /// Returns the skills to install, or `null` on a usage error.
-  _SkillSelection? _resolveSkills() {
+  SkillSelection? _resolveSkills(InteractiveInstall flow) {
     final allSkills = argResults!['all-skills'] as bool;
     final skillsCsv = argResults!['skills'] as String?;
 
     if (allSkills) {
-      return _SkillSelection(
-        SkillRegistry.skills,
-        SkillRegistry.workflowSkills,
-      );
+      return SkillSelection.all();
     }
 
     if (skillsCsv != null) {
@@ -195,17 +151,14 @@ class InstallCommand extends Command<int> {
     // No flag: prompt interactively, or install everything when there is
     // no terminal (CI, pipes) so the command never hangs on stdin.
     if (!Prompts.isInteractive) {
-      return _SkillSelection(
-        SkillRegistry.skills,
-        SkillRegistry.workflowSkills,
-      );
+      return SkillSelection.all();
     }
 
-    return _promptForSkills();
+    return flow.promptForSkills();
   }
 
   /// Resolves a comma-separated list of skill ids/names against the registry.
-  _SkillSelection? _parseSkillsCsv(String csv) {
+  SkillSelection? _parseSkillsCsv(String csv) {
     final ids = csv.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty);
 
     final audit = <SkillBundle>[];
@@ -239,105 +192,6 @@ class InstallCommand extends Command<int> {
       return null;
     }
 
-    return _SkillSelection(audit, workflow);
+    return SkillSelection(audit, workflow);
   }
-
-  /// Interactive multi-select over all skills (audit + workflow), all
-  /// pre-selected by default.
-  _SkillSelection _promptForSkills() {
-    final audit = SkillRegistry.skills;
-    final workflow = SkillRegistry.workflowSkills;
-
-    final options = <String>[
-      ...audit.map((s) => s.displayName),
-      ...workflow.map((s) => s.displayName),
-    ];
-    final defaults = List<bool>.filled(options.length, true);
-
-    final indexes = Prompts.selectMany(
-      prompt: 'Select the skills to install',
-      options: options,
-      defaults: defaults,
-    );
-
-    final selectedAudit = <SkillBundle>[];
-    final selectedWorkflow = <WorkflowSkill>[];
-    for (final i in indexes) {
-      if (i < audit.length) {
-        selectedAudit.add(audit[i]);
-      } else {
-        selectedWorkflow.add(workflow[i - audit.length]);
-      }
-    }
-
-    return _SkillSelection(selectedAudit, selectedWorkflow);
-  }
-
-  // ──────────────────────────────────────────────────────────────────
-  // Installation
-  // ──────────────────────────────────────────────────────────────────
-
-  Future<int> _installToAgents(
-    List<AgentConfig> agents,
-    ContentLoader loader,
-    _SkillSelection selection,
-    bool force,
-  ) async {
-    final single = agents.length == 1;
-    var totalSkills = 0;
-    var agentCount = 0;
-    String? lastLocation;
-
-    for (final agent in agents) {
-      final progress = _logger.progress(agent.displayName);
-
-      final installer = AgentInstaller(
-        logger: _logger,
-        loader: loader,
-        agentConfig: agent,
-      );
-
-      final result = await installer.install(
-        bundles: selection.audit,
-        force: force,
-      );
-      final wfCount = installer.installWorkflowSkills(selection.workflow);
-      final agentTotal = result.skillCount + wfCount;
-
-      totalSkills += agentTotal;
-      if (agentTotal > 0) agentCount++;
-      lastLocation = result.targetDirectory;
-
-      final label = agent.contentLabel;
-      final plural = agentTotal == 1 ? label : '${label}s';
-      final parts = <String>['$agentTotal $plural'];
-      if (result.skippedCount > 0) {
-        parts.add('${result.skippedCount} skipped');
-      }
-      progress.complete('${agent.displayName}  ${parts.join(', ')}');
-    }
-
-    _logger.info('');
-    if (single && lastLocation != null) {
-      _logger.info('Location: $lastLocation');
-    } else if (agentCount > 0) {
-      _logger.success(
-        'Installed $totalSkills skills across $agentCount agents.',
-      );
-    } else {
-      _logger.info('No agents detected. Run "somnio setup" for guided setup.');
-    }
-
-    return ExitCode.success.code;
-  }
-}
-
-/// The skills chosen for installation, split by kind.
-class _SkillSelection {
-  const _SkillSelection(this.audit, this.workflow);
-
-  final List<SkillBundle> audit;
-  final List<WorkflowSkill> workflow;
-
-  bool get isEmpty => audit.isEmpty && workflow.isEmpty;
 }
