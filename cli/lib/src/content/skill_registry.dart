@@ -239,6 +239,14 @@ class SkillRegistry {
     return null;
   }
 
+  /// Find a workflow skill by its id or name.
+  static WorkflowSkill? findWorkflowById(String idOrName) {
+    for (final skill in workflowSkills) {
+      if (skill.id == idOrName || skill.name == idOrName) return skill;
+    }
+    return null;
+  }
+
   /// Returns unique technology display names derived from registered bundles.
   ///
   /// Driven entirely by [SkillBundle.techDisplayName], so adding a new

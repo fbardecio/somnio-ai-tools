@@ -9,6 +9,7 @@ import '../content/skill_registry.dart';
 import '../utils/bundle_detector.dart';
 import '../utils/command_helpers.dart';
 import '../utils/package_resolver.dart';
+import '../utils/prompts.dart';
 import '../utils/registry_modifier.dart';
 import '../utils/scaffold_generator.dart';
 
@@ -131,14 +132,15 @@ class AddCommand extends Command<int> {
     ];
 
     final List<String> selectedTypes;
-    if (force) {
+    if (force || !Prompts.isInteractive) {
       selectedTypes = typeChoices;
     } else {
-      selectedTypes = _logger.chooseAny(
-        'Which skill types would you like to create?',
-        choices: typeChoices,
-        defaultValues: typeChoices,
+      final indexes = Prompts.selectMany(
+        prompt: 'Which skill types would you like to create?',
+        options: typeChoices,
+        defaults: List<bool>.filled(typeChoices.length, true),
       );
+      selectedTypes = indexes.map((i) => typeChoices[i]).toList();
     }
 
     if (selectedTypes.isEmpty) {

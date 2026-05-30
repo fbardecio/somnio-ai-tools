@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Interactive install wizard**: `somnio install` now lets you pick which agents and skills to install via an arrow-key + spacebar menu instead of installing everything. New `--all-skills` flag installs every skill without prompting, and `--skills <ids>` installs a specific comma-separated subset (skips the wizard). When there is no interactive terminal (CI, pipes) it falls back to installing all skills so automation never hangs.
 - **Dart Model from JSON Skill**: New standalone `dart-model-from-json` skill that generates Dart model classes from a JSON structure using `json_annotation` and `equatable` (`copyWith`, `fromJson`, `toJson`, Equatable props; handles nested objects and arrays). Registered in the CLI skill registry.
 - **Flutter Rules**: Added `code-patterns`, `layout`, and `ui-theming` rules under `agent-rules/rules/flutter/`.
 
 ### Changed
 
+- **Interactive menus**: Migrated all selection prompts (`install`, `add`, `workflow`) from `mason_logger` to `interact_cli` with a Somnio-branded theme. The new menus redraw with relative cursor movement, fixing the jumping / duplicated-line rendering glitches the previous prompts showed when the list reached the bottom of the terminal.
 - **Agent Rules**: Refactored flutter, nestjs, and react rule content across stacks and regenerated all tool adapters (Claude, Cursor, Windsurf, Copilot, Codex, Antigravity).
 - **Docs**: Updated `docs/agent-rules.md` and the Cursor/Antigravity adapter READMEs to reflect the current flutter rule set.
 - **flutter-best-practices Skill**: Updated standards references to point at `code-patterns` instead of the removed `dart-model-from-json` rule.
