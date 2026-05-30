@@ -74,6 +74,7 @@ somnio setup
 | [Git Branch Format](docs/skills.md#git-branch-format) | Branch naming convention generator |
 | [Git Commit Format](docs/skills.md#git-commit-format) | Conventional Commits message generator |
 | [Dart Model from JSON](docs/skills.md#dart-model-from-json) | Generate Dart model classes from a JSON structure with json_annotation + equatable |
+| [Optimize Claude Config](docs/skills.md#optimize-claude-config) | Audit & optimize a repo's Claude Code config for lazy-loading rules and a lean CLAUDE.md |
 
 > [Full skills catalog with examples →](docs/skills.md)
 

@@ -1,5 +1,22 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
 import 'package:somnio/src/content/skill_registry.dart';
 import 'package:test/test.dart';
+
+/// Walks up from the test's working directory until it finds the repo root
+/// (the directory that contains the top-level `skills/` folder).
+String _repoRoot() {
+  var dir = Directory.current;
+  while (true) {
+    if (Directory(p.join(dir.path, 'skills')).existsSync()) return dir.path;
+    final parent = dir.parent;
+    if (parent.path == dir.path) {
+      throw StateError('Could not locate repo root from ${Directory.current}');
+    }
+    dir = parent;
+  }
+}
 
 void main() {
   group('SkillRegistry.findWorkflowById', () {
@@ -15,6 +32,15 @@ void main() {
       expect(skill!.id, 'git_commit_format');
     });
 
+    test('resolves optimize-claude-config by id and name', () {
+      final byId = SkillRegistry.findWorkflowById('optimize_claude_config');
+      final byName = SkillRegistry.findWorkflowById('optimize-claude-config');
+      expect(byId, isNotNull);
+      expect(byId!.name, 'optimize-claude-config');
+      expect(byId.displayName, 'Optimize Claude Config');
+      expect(byName?.id, 'optimize_claude_config');
+    });
+
     test('returns null for an unknown id', () {
       expect(SkillRegistry.findWorkflowById('does-not-exist'), isNull);
     });
@@ -23,6 +49,32 @@ void main() {
       // flutter_health is an audit bundle, not a workflow skill.
       expect(SkillRegistry.findWorkflowById('flutter_health'), isNull);
       expect(SkillRegistry.findById('flutter_health'), isNotNull);
+    });
+  });
+
+  group('registered skill files exist on disk', () {
+    final root = _repoRoot();
+
+    test('every workflow skill has its SKILL.md present', () {
+      for (final skill in SkillRegistry.workflowSkills) {
+        final file = File(p.join(root, skill.planRelativePath));
+        expect(
+          file.existsSync(),
+          isTrue,
+          reason: '${skill.name}: missing ${skill.planRelativePath}',
+        );
+      }
+    });
+
+    test('every audit bundle has its SKILL.md present', () {
+      for (final bundle in SkillRegistry.skills) {
+        final file = File(p.join(root, bundle.planRelativePath));
+        expect(
+          file.existsSync(),
+          isTrue,
+          reason: '${bundle.name}: missing ${bundle.planRelativePath}',
+        );
+      }
     });
   });
 

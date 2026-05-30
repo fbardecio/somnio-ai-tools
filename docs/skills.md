@@ -369,4 +369,34 @@ Generate Dart models for this JSON: { "id": "123", "name": "John", "address": { 
 
 ---
 
+## Optimize Claude Config
+
+Audits and optimizes a repository's Claude Code configuration so path-scoped rules load **lazily** (only when relevant) and `CLAUDE.md` stays a lightweight, always-loaded index. It first maps the **real project tree** with `git ls-files` (top-level domains, monorepo package roots, per-domain extensions, generated/frozen areas) so every path glob is derived from and validated against actual files — including how many files each glob matches. The skill is idempotent (leaves correct config untouched) and conservative (never deletes ambiguous content or auto-applies new scopes without confirmation).
+
+It covers three areas:
+
+1. **Rule frontmatter** (`.claude/rules/**/*.md`) — migrates to the native lazy-load `paths:` YAML array and validates every glob against the tree: eager `globs:` → `paths:`, one-line CSV `paths:` → array, unscoped rules get a proposed scope, **stale globs that match zero files** (the most common silent failure) and over-broad globs are flagged with corrected patterns.
+2. **CLAUDE.md slimming** — removes redundant `@import`-only shells, de-duplicates inlined rule bodies (leaving pointers), and preserves hand-written content and healthy indexes.
+3. **read-not-create hook** — verifies/installs the `PreToolUse(Write)` hook (`.claude/hooks/inject-rules.py`) that injects a matching rule when a new file is created, working around the caveat that `paths:` rules load on read, not on create.
+
+Not Flutter-specific — the domain/extension map adapts to any stack (detects `package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, …). Requires `git` and `python3`.
+
+**Use when:**
+- Your `.claude/rules/` have grown and you're not sure they load lazily (or load at all)
+- `CLAUDE.md` has bloated with inlined rule bodies or redundant imports
+- You want to verify the read-not-create hook is installed
+
+**Invocation:**
+```
+/optimize-claude-config              # audit, report, confirm, apply
+/optimize-claude-config --audit-only # report only, never writes
+/optimize-claude-config <path>       # operate on another repo instead of the cwd
+```
+
+> Recommended first run: `--audit-only` to review the report before applying anything.
+
+**Output:** An audit report of every rule, CLAUDE.md, and the hook — then, after confirmation, the applied fixes (never committed automatically).
+
+---
+
 **See also:** [Installation](installation.md) | [CLI Reference](cli.md) | [Workflow Guide](workflows.md)

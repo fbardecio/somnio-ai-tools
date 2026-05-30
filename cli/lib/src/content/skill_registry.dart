@@ -220,6 +220,21 @@ class SkillRegistry {
       planRelativePath:
           'skills/dart-model-from-json/SKILL.md',
     ),
+    WorkflowSkill(
+      id: 'optimize_claude_config',
+      name: 'optimize-claude-config',
+      displayName: 'Optimize Claude Config',
+      description:
+          "Audits and optimizes a repository's Claude Code configuration so "
+          'path-scoped rules load lazily and CLAUDE.md stays a lightweight '
+          'always-loaded index. Migrates rule frontmatter to the native '
+          'lazy-load paths: form, validates every glob against the real file '
+          'tree (catching stale and over-broad patterns), slims redundant '
+          'CLAUDE.md content, and installs the read-not-create hook. Runs '
+          'audit-first with confirmation; pass --audit-only to skip applying.',
+      planRelativePath:
+          'skills/optimize-claude-config/SKILL.md',
+    ),
   ];
 
   /// Find a skill bundle by its ID.
