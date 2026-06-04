@@ -35,7 +35,17 @@ void main() {
     test('exposes the canonical stack list', () {
       expect(
         AgentRuleRegistry.stacks,
-        ['flutter', 'functions', 'nestjs', 'react', 'typescript'],
+        [
+          'django',
+          'fastapi',
+          'flask',
+          'flutter',
+          'functions',
+          'nestjs',
+          'python',
+          'react',
+          'typescript',
+        ],
       );
     });
   });

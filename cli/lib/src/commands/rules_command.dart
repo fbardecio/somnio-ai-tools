@@ -80,7 +80,7 @@ class _RulesInstallCommand extends Command<int> {
 
   @override
   String get description =>
-      'Install agent coding rules per stack (flutter / nestjs / react).\n'
+      'Install agent coding rules per stack (flutter / nestjs / react / python / fastapi / django / flask).\n'
       '\n'
       'Examples:\n'
       '  somnio rules install                                  # interactive\n'

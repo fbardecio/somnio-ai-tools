@@ -4,7 +4,7 @@
 
 **AI-powered audit skills for Claude Code, Cursor, and 40+ other agents.**
 
-Run comprehensive health audits, security scans, and best-practices checks on Flutter, NestJS, React, and more — directly from your AI coding assistant.
+Run comprehensive health audits, security scans, and best-practices checks on Flutter, NestJS, React, Python (FastAPI, Django, Flask), and more — directly from your AI coding assistant.
 
 [![Install Somnio Skills](https://img.shields.io/badge/skills.sh-Install%20Somnio%20Skills-blue?style=for-the-badge)](https://skills.sh/somnio-software/somnio-ai-tools)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
@@ -62,6 +62,8 @@ somnio setup
 | [NestJS Best Practices](docs/skills.md#nestjs-best-practices) | `np` | DTO, architecture, and error handling validation |
 | [React Health Audit](docs/skills.md#react-health-audit) | `rh` | 13-step frontend health audit with weighted scoring |
 | [React Best Practices](docs/skills.md#react-best-practices) | `rp` | Component, hooks, state management, and TypeScript validation |
+| [Python Health Audit](docs/skills.md#python-health-audit) | `ph` | 13-step project health audit with weighted scoring |
+| [Python Best Practices](docs/skills.md#python-best-practices) | `pp` | Code style, typing, function design, and testing validation |
 | [Security Audit](docs/skills.md#security-audit) | `sa` | Framework-agnostic security scan (secrets, deps, SAST) |
 
 ### Workflows & Utilities
@@ -110,6 +112,10 @@ Global coding standards — automatically applied by your AI agent in every proj
 | NestJS Rules | DTOs, services, controllers, repositories, testing, error handling, TypeScript |
 | React Rules | Components, hooks, state management, performance, testing, TypeScript |
 | TypeScript Rules | tsconfig standards, naming, imports, types, nullables, async/await, error handling |
+| Python Rules | Code style (PEP 8/Ruff), strict type hints, function design, module structure, Pydantic validation, EAFP error handling, pytest unit + integration testing |
+| FastAPI Rules | Domain-package structure, APIRouter modularization, Pydantic request/response schemas, Depends injection, async vs sync handler choice, HTTPException boundary translation — layers on Python Rules |
+| Django Rules | Models and ORM optimization (N+1 defense), migrations, service/selector layer, DRF views/serializers, settings by environment, security hardening, pytest-django testing — layers on Python Rules |
+| Flask Rules | Application factory, blueprints, configuration hierarchy, init_app extension pattern, Flask-SQLAlchemy sessions, error handler registration, conftest fixture testing — layers on Python Rules |
 
 Install via the Somnio CLI:
 

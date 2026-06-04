@@ -111,6 +111,27 @@ void main() {
       expect(result.success, isFalse);
       expect(result.error, contains('Adapter file not found'));
     });
+
+    test('reads source fragment from adapterFileName when it differs from '
+        'the target basename (Codex: system-prompt.md -> AGENTS.md)', () {
+      const codexRule = AgentRule(
+        agentId: 'codex',
+        displayName: 'OpenAI Codex',
+        adapterPath: 'adapters/codex',
+        projectPath: 'AGENTS.md',
+        adapterFileName: 'system-prompt.md',
+        format: RulesInstallFormat.singleFile,
+      );
+      _writeFile(repoRoot, 'adapters/codex/flutter/system-prompt.md', 'FLUTTER\n');
+      final target = p.join(tmp.path, 'out', 'AGENTS.md');
+
+      final result = installer.install(codexRule, target, const ['flutter']);
+
+      expect(result.success, isTrue);
+      final written = File(target).readAsStringSync();
+      expect(written, contains(_beginMarker));
+      expect(written, contains('FLUTTER'));
+    });
   });
 
   // ---------------------------------------------------------------------------

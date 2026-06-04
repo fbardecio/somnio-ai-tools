@@ -5,6 +5,14 @@ All notable changes to the Somnio CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-06-04
+
+### Added
+
+- **Python Health Audit Skill**: New `python-health-audit` skill (`somnio-ph` / `ph`) that performs a comprehensive Python Project Health Audit. Analyzes tech stack, architecture, API/interface design, data layer, testing, code quality, CI/CD, and documentation. Produces a Google Docs-ready report with section scores and weighted overall score.
+- **Python Best Practices Skill**: New `python-best-practices` skill (`somnio-pp` / `pp`) that runs a micro-level Python code quality audit. Validates code against live GitHub standards for typing, code style, function design, data validation, error handling, module structure, and testing. Produces a detailed violations report with prioritized action plan.
+- **Python agent rules stacks**: Added `django`, `fastapi`, `flask`, and `python` to the `AgentRuleRegistry.stacks` list, enabling `somnio rules install` to target Python and its major frameworks alongside the existing Flutter/NestJS/React stacks.
+
 ## [2.5.0] - 2026-05-30
 
 ### Added

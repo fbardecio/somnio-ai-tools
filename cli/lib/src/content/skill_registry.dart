@@ -130,6 +130,40 @@ class SkillRegistry {
           'skills/react-best-practices/assets/report-template.md',
     ),
     SkillBundle(
+      id: 'python_health',
+      name: 'python-health-audit',
+      aliases: ['somnio-ph', 'ph'],
+      displayName: 'Python Project Health Audit',
+      description:
+          'Execute a comprehensive Python Project Health Audit. '
+          'Analyzes tech stack, architecture, API/interface design, '
+          'data layer, testing, code quality, CI/CD, and documentation. '
+          'Produces a Google Docs-ready report with section scores and '
+          'weighted overall score.',
+      planRelativePath: 'skills/python-health-audit/SKILL.md',
+      rulesDirectory: 'skills/python-health-audit/references',
+      workflowPath:
+          'skills/python-health-audit/.agent/workflows/python_health_audit.md',
+      templatePath: 'skills/python-health-audit/assets/report-template.md',
+    ),
+    SkillBundle(
+      id: 'python_plan',
+      name: 'python-best-practices',
+      aliases: ['somnio-pp', 'pp'],
+      displayName: 'Python Best Practices Check',
+      description:
+          'Execute a micro-level Python code quality audit. '
+          'Validates code against live GitHub standards for typing, '
+          'code style, function design, data validation, error handling, '
+          'module structure, and testing. Produces a detailed violations '
+          'report with prioritized action plan.',
+      planRelativePath: 'skills/python-best-practices/SKILL.md',
+      rulesDirectory: 'skills/python-best-practices/references',
+      workflowPath:
+          'skills/python-best-practices/.agent/workflows/python_best_practices.md',
+      templatePath: 'skills/python-best-practices/assets/report-template.md',
+    ),
+    SkillBundle(
       id: 'security_audit',
       name: 'security-audit',
       aliases: ['somnio-sa', 'sa'],

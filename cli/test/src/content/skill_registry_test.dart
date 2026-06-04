@@ -104,6 +104,20 @@ void main() {
       expect(byShort?.id, 'flutter_health');
     });
 
+    test('resolves python_health by somnio-ph and ph aliases', () {
+      final byLong = SkillRegistry.findByName('somnio-ph');
+      final byShort = SkillRegistry.findByName('ph');
+      expect(byLong?.id, 'python_health');
+      expect(byShort?.id, 'python_health');
+    });
+
+    test('resolves python_plan by somnio-pp and pp aliases', () {
+      final byLong = SkillRegistry.findByName('somnio-pp');
+      final byShort = SkillRegistry.findByName('pp');
+      expect(byLong?.id, 'python_plan');
+      expect(byShort?.id, 'python_plan');
+    });
+
     test('returns null for an unknown name or alias', () {
       expect(SkillRegistry.findByName('unknown-skill'), isNull);
     });
@@ -112,7 +126,7 @@ void main() {
   group('SkillRegistry.technologies', () {
     test('returns unique, sorted technology display names', () {
       final techs = SkillRegistry.technologies;
-      expect(techs, ['Flutter', 'NestJS', 'React', 'Security']);
+      expect(techs, ['Flutter', 'NestJS', 'Python', 'React', 'Security']);
       // Sorted and de-duplicated.
       final sorted = [...techs]..sort();
       expect(techs, sorted);
@@ -127,6 +141,14 @@ void main() {
       // Two Flutter bundles: health + best-practices.
       expect(bundles.map((b) => b.id),
           containsAll(['flutter_health', 'flutter_plan']));
+    });
+
+    test('returns bundles matching Python technology', () {
+      final bundles = SkillRegistry.byTechnologies(['Python']);
+      expect(bundles, isNotEmpty);
+      expect(bundles.map((b) => b.id),
+          containsAll(['python_health', 'python_plan']));
+      expect(bundles.every((b) => b.techDisplayName == 'Python'), isTrue);
     });
 
     test('returns empty when no technology matches', () {

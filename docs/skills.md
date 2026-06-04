@@ -126,6 +126,46 @@ Check this React project against current best practices and flag any violations.
 
 ---
 
+## Python Health Audit
+
+**Aliases:** `ph`, `somnio-ph`
+
+Comprehensive 13-step health audit for Python projects. Analyses code quality, dependency hygiene, type-annotation coverage, test coverage, security posture, and architectural consistency. Works with any Python project that has a `pyproject.toml` (Poetry, Hatch, PDM, plain PEP 517 builds).
+
+**Use when:**
+- Onboarding to an existing Python codebase
+- Preparing a technical debt remediation plan for a Python service or library
+- Running a periodic project health check on a FastAPI, Django, Flask, or plain Python package
+
+**Example prompt:**
+```
+Run a full Python health audit on this project and generate a report.
+```
+
+**Output:** Weighted score report saved to `./reports/`
+
+---
+
+## Python Best Practices
+
+**Aliases:** `pp`, `somnio-pp`
+
+Micro-level Python code quality validation against team standards. Checks PEP 8 / Ruff compliance, type-annotation usage, test structure, import hygiene, and framework-specific patterns (FastAPI route definitions, Django ORM usage, Flask blueprint layout).
+
+**Use when:**
+- Reviewing a pull request for Python code quality
+- Enforcing team-wide Python coding standards
+- Validating a feature module or service before release
+
+**Example prompt:**
+```
+Check this Python project against current best practices and flag any violations.
+```
+
+**Output:** Violations report with prioritized action plan
+
+---
+
 ## Security Audit
 
 **Aliases:** `sa`, `somnio-sa`

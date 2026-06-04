@@ -191,6 +191,8 @@ See the [Workflow Guide](workflows.md) for details.
 | `nestjs-best-practices` | `np`, `somnio-np` | NestJS code quality check |
 | `react-health-audit` | `rh`, `somnio-rh` | React project health audit (13 steps) |
 | `react-best-practices` | `rp`, `somnio-rp` | React code quality check |
+| `python-health-audit` | `ph`, `somnio-ph` | Python project health audit (13 steps) |
+| `python-best-practices` | `pp`, `somnio-pp` | Python code quality check |
 | `security-audit` | `sa`, `somnio-sa` | Security audit (any stack, 11 steps) |
 
 See the [Skills Catalog](skills.md) for full descriptions.
@@ -202,7 +204,7 @@ See the [Skills Catalog](skills.md) for full descriptions.
 When you run `somnio run <alias>`:
 
 1. **Parse arguments** — `--agent`, `--model`, `--skip-validation`, `--no-preflight`
-2. **Validate project type** — Flutter needs `pubspec.yaml`, NestJS needs `package.json` + `@nestjs/core`
+2. **Validate project type** — Flutter needs `pubspec.yaml`, NestJS needs `package.json` + `@nestjs/core`, Python needs `pyproject.toml`
 3. **Run pre-flight steps** — Tool installation, version alignment, test coverage (no AI needed)
 4. **Resolve AI agent and model** — Auto-detect or use `--agent` flag
 5. **Parse SKILL.md** — Extract step order from the execution plan

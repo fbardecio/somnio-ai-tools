@@ -55,7 +55,7 @@ The CLI is **data-driven**: agents and skills are declared as config/registry en
 
 ## Agent rules (`agent-rules/`)
 
-`rules/<stack>/*.md` (flutter, nestjs, react, functions, typescript) are the **single source of truth**. Adapters under `adapters/` (claude, cursor, antigravity, copilot, codex, windsurf) are **generated — never edit them directly**. After editing a rule, regenerate:
+`rules/<stack>/*.md` (django, fastapi, flask, flutter, functions, nestjs, python, react, typescript) are the **single source of truth**. Adapters under `adapters/` (claude, cursor, antigravity, copilot, codex, windsurf) are **generated — never edit them directly**. After editing a rule, regenerate:
 
 ```bash
 cd agent-rules
