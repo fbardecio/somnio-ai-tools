@@ -350,4 +350,54 @@ void main() {
           'Read /path/to/rule.yaml and follow ALL instructions in the prompt field');
     });
   });
+
+  group('AgentConfig.resolveTier', () {
+    const tiered = AgentConfig(
+      id: 'tiered',
+      displayName: 'Tiered',
+      installPath: '{home}/.tiered',
+      models: ['a', 'b', 'c'],
+      modelTiers: {'cheap': 'a', 'mid': 'b', 'frontier': 'c'},
+      defaultModel: 'b',
+      fallbackModel: 'a',
+    );
+
+    test('returns mapped model when tier is present', () {
+      expect(tiered.resolveTier('cheap'), 'a');
+      expect(tiered.resolveTier('mid'), 'b');
+      expect(tiered.resolveTier('frontier'), 'c');
+    });
+
+    test('falls back to defaultModel when tier is absent', () {
+      expect(tiered.resolveTier('unknown'), 'b');
+    });
+
+    test('falls back to fallbackModel when no map and no defaultModel', () {
+      const agent = AgentConfig(
+        id: 'fallbackonly',
+        displayName: 'Fallback Only',
+        installPath: '{home}/.fb',
+        fallbackModel: 'cheapo',
+      );
+      expect(agent.resolveTier('cheap'), 'cheapo');
+    });
+
+    test('passes the tier through when no map, default, or fallback', () {
+      const agent = AgentConfig(
+        id: 'bare',
+        displayName: 'Bare',
+        installPath: '{home}/.bare',
+      );
+      expect(agent.resolveTier('cheap'), 'cheap');
+    });
+
+    test('defaults to an empty modelTiers map', () {
+      const agent = AgentConfig(
+        id: 'empty',
+        displayName: 'Empty',
+        installPath: '{home}/.empty',
+      );
+      expect(agent.modelTiers, isEmpty);
+    });
+  });
 }

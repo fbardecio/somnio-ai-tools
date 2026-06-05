@@ -29,6 +29,7 @@ class SkillRegistry {
           'skills/flutter-health-audit/.agent/workflows/flutter_health_audit.md',
       templatePath:
           'skills/flutter-health-audit/assets/report-template.md',
+      agentsDirectory: 'skills/flutter-health-audit/agents',
     ),
     SkillBundle(
       id: 'flutter_plan',
@@ -48,6 +49,7 @@ class SkillRegistry {
           'skills/flutter-best-practices/.agent/workflows/flutter_best_practices.md',
       templatePath:
           'skills/flutter-best-practices/assets/report-template.md',
+      agentsDirectory: 'skills/flutter-best-practices/agents',
     ),
     SkillBundle(
       id: 'nestjs_health',
@@ -68,6 +70,7 @@ class SkillRegistry {
           'skills/nestjs-health-audit/.agent/workflows/nestjs_health_audit.md',
       templatePath:
           'skills/nestjs-health-audit/assets/report-template.md',
+      agentsDirectory: 'skills/nestjs-health-audit/agents',
     ),
     SkillBundle(
       id: 'nestjs_plan',
@@ -88,6 +91,7 @@ class SkillRegistry {
           'skills/nestjs-best-practices/.agent/workflows/nestjs_best_practices.md',
       templatePath:
           'skills/nestjs-best-practices/assets/report-template.md',
+      agentsDirectory: 'skills/nestjs-best-practices/agents',
     ),
     SkillBundle(
       id: 'react_health',
@@ -108,6 +112,7 @@ class SkillRegistry {
           'skills/react-health-audit/.agent/workflows/react_health_audit.md',
       templatePath:
           'skills/react-health-audit/assets/report-template.md',
+      agentsDirectory: 'skills/react-health-audit/agents',
     ),
     SkillBundle(
       id: 'react_plan',
@@ -128,6 +133,7 @@ class SkillRegistry {
           'skills/react-best-practices/.agent/workflows/react_best_practices.md',
       templatePath:
           'skills/react-best-practices/assets/report-template.md',
+      agentsDirectory: 'skills/react-best-practices/agents',
     ),
     SkillBundle(
       id: 'python_health',
@@ -145,6 +151,7 @@ class SkillRegistry {
       workflowPath:
           'skills/python-health-audit/.agent/workflows/python_health_audit.md',
       templatePath: 'skills/python-health-audit/assets/report-template.md',
+      agentsDirectory: 'skills/python-health-audit/agents',
     ),
     SkillBundle(
       id: 'python_plan',
@@ -162,6 +169,7 @@ class SkillRegistry {
       workflowPath:
           'skills/python-best-practices/.agent/workflows/python_best_practices.md',
       templatePath: 'skills/python-best-practices/assets/report-template.md',
+      agentsDirectory: 'skills/python-best-practices/agents',
     ),
     SkillBundle(
       id: 'security_audit',
@@ -182,6 +190,7 @@ class SkillRegistry {
           'skills/security-audit/.agent/workflows/security_audit.md',
       templatePath:
           'skills/security-audit/assets/report-template.md',
+      agentsDirectory: 'skills/security-audit/agents',
     ),
   ];
 

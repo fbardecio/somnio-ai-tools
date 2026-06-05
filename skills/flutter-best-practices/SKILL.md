@@ -8,7 +8,7 @@ description: >-
   standards compliance.
   Triggers on: 'flutter best practices', 'code quality', 'code review',
   'flutter standards', 'architecture compliance', 'testing quality'.
-allowed-tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch
+allowed-tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch, Agent
 ---
 
 # Flutter Micro-Code Audit Plan
@@ -95,11 +95,11 @@ You are a master at:
 - Read and follow the instructions in `references/best-practices-generator.md`
 
 **Rule Execution Order**:
-1. Read and follow the instructions in `references/testing-quality.md`
-2. Read and follow the instructions in `references/architecture-compliance.md`
-3. Read and follow the instructions in `references/code-standards.md`
-4. Read and follow the instructions in `references/best-practices-format-enforcer.md`
-5. Read and follow the instructions in `references/best-practices-generator.md`
+1. Read and follow the instructions in `references/testing-quality.md` {model: mid}
+2. Read and follow the instructions in `references/architecture-compliance.md` {model: mid}
+3. Read and follow the instructions in `references/code-standards.md` {model: mid}
+4. Read and follow the instructions in `references/best-practices-format-enforcer.md` {model: frontier}
+5. Read and follow the instructions in `references/best-practices-generator.md` {model: frontier}
 
 ## Report Metadata (MANDATORY)
 
@@ -120,3 +120,33 @@ Date: [YYYY-MM-DD]
 Somnio AI Tools: https://github.com/somnio-software/somnio-ai-tools
 ---
 ```
+
+## Subagent Dispatch (in-session)
+
+This section describes the **in-session multi-agent path** used when Claude Code dispatches subagents via the Agent tool. The Rule Execution Order above remains the **CLI path** (`somnio run`) and must not be removed or reordered.
+
+**Entry point**: `agents/orchestrator.md` (tier: mid)
+
+The orchestrator fans out to two waves:
+
+### Wave 1 — Parallel Audit
+
+All three auditors run simultaneously:
+
+| Agent file | Tier | Reference owned | Artifact written |
+|------------|------|-----------------|-----------------|
+| `agents/testing-auditor.md` | mid | `references/testing-quality.md` | `reports/.artifacts/flutter-best-practices/step_01_testing_quality.md` |
+| `agents/architecture-auditor.md` | mid | `references/architecture-compliance.md` | `reports/.artifacts/flutter-best-practices/step_02_architecture_compliance.md` |
+| `agents/code-standards-auditor.md` | mid | `references/code-standards.md` | `reports/.artifacts/flutter-best-practices/step_03_code_standards.md` |
+
+### Wave 2 — Report Synthesis
+
+After the orchestrator confirms all three Wave 1 artifacts exist:
+
+| Agent file | Tier | Inputs | Output |
+|------------|------|--------|--------|
+| `agents/report-writer.md` | frontier | All 3 step artifacts + `assets/report-template.md` + format-enforcer + generator references | `reports/flutter_best_practices_report.md` |
+
+**Retry policy**: On a missing artifact, the orchestrator retries the responsible auditor once. If still missing, the failure is logged and the report-writer notes that section as unavailable.
+
+**Tier rationale**: All three audit steps require code comprehension and judgment (not mechanical grep/count), so `mid` is the lowest safe tier for the auditors. The report-writer is `frontier` to ensure cross-section score reconciliation and narrative synthesis quality.

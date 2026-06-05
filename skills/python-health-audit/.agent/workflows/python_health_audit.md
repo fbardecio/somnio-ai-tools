@@ -4,18 +4,16 @@ description: Execute a comprehensive Python Project Health Audit. Analyzes tech 
 
 # Python Project Health Audit
 
-Execute the Python Project Health Audit through modular rules organized in execution waves. Each rule produces output that feeds into the final report.
+Read `agents/orchestrator.md` and follow ALL instructions.
 
-## Execution Discipline (NON-NEGOTIABLE)
+The orchestrator is the single entry point for the in-session path. It dispatches all analysis subagents in dependency-ordered waves, validates artifacts, and hands the full artifact manifest to the report-writer.
 
-- NEVER skip, combine, or abbreviate any step
-- NEVER summarize a reference file instead of executing it
-- ALWAYS read each reference file completely, then follow ALL its instructions
-- ALWAYS log completion after each step: "STEP N COMPLETED: [result summary]"
-- NEVER proceed to the next step without completing the current one
-- If a step fails: document the failure and attempt recovery before moving on
+---
+
+<!-- CLI PATH (somnio run) — preserved below for the plan_parser; do not remove or reorder -->
 
 ## Wave 0: Environment Setup (MANDATORY - Sequential)
+<!-- model: cheap -->
 
 Read `python-health-audit/references/tool-installer.md` and follow ALL instructions in the prompt field
 STEP 0a COMPLETED: [log result]
@@ -32,6 +30,7 @@ STEP 0d COMPLETED: [log result]
 CRITICAL: If version-alignment fails, STOP execution and provide resolution steps.
 
 ## Wave 1: Structure Analysis (Parallelizable)
+<!-- model: cheap -->
 
 These steps are independent and can be executed in parallel if supported:
 
@@ -45,16 +44,20 @@ STEP 2 COMPLETED: [log result]
 
 These steps are independent and can be executed in parallel if supported:
 
+<!-- model: cheap -->
 Read `python-health-audit/references/cicd-analysis.md` and follow ALL instructions in the prompt field
 STEP 3 COMPLETED: [log result]
 
+<!-- model: mid -->
 Read `python-health-audit/references/testing-analysis.md` and follow ALL instructions in the prompt field
 STEP 4 COMPLETED: [log result]
 
+<!-- model: mid -->
 Read `python-health-audit/references/code-quality.md` and follow ALL instructions in the prompt field
 STEP 5 COMPLETED: [log result]
 
 ## Wave 3: Domain Analysis (Parallelizable)
+<!-- model: mid -->
 
 These steps are independent and can be executed in parallel if supported:
 
@@ -65,11 +68,13 @@ Read `python-health-audit/references/data-layer-analysis.md` and follow ALL inst
 STEP 7 COMPLETED: [log result]
 
 ## Wave 4: Documentation (Sequential)
+<!-- model: cheap -->
 
 Read `python-health-audit/references/documentation-analysis.md` and follow ALL instructions in the prompt field
 STEP 8 COMPLETED: [log result]
 
 ## Wave 5: Report (Sequential - Requires ALL previous results)
+<!-- model: frontier -->
 
 Read `python-health-audit/references/report-generator.md` and follow ALL instructions in the prompt field
 STEP 9 COMPLETED: [log result]

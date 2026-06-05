@@ -8,7 +8,7 @@ description: >-
   code quality, validate best practices, or review Python code standards.
   Triggers on: 'python best practices', 'python code quality', 'code review',
   'python standards', 'type hints review', 'pytest review', 'pydantic validation'.
-allowed-tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch
+allowed-tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch, Agent
 ---
 
 # Python Micro-Code Audit Plan
@@ -167,15 +167,44 @@ the template.
 `assets/report-template.md`
 
 **Rule Execution Order**:
-1.  `references/typing.md`
-2.  `references/code-style.md`
-3.  `references/function-design.md`
-4.  `references/data-validation.md`
-5.  `references/error-handling.md`
-6.  `references/module-structure.md`
-7.  `references/testing-quality.md`
-8.  `references/best-practices-format-enforcer.md`
-9.  `references/best-practices-generator.md`
+1.  `references/typing.md` {model: mid}
+2.  `references/code-style.md` {model: cheap}
+3.  `references/function-design.md` {model: mid}
+4.  `references/data-validation.md` {model: mid}
+5.  `references/error-handling.md` {model: mid}
+6.  `references/module-structure.md` {model: cheap}
+7.  `references/testing-quality.md` {model: mid}
+8.  `references/best-practices-format-enforcer.md` {model: frontier}
+9.  `references/best-practices-generator.md` {model: frontier}
+
+## Subagent Dispatch (in-session)
+
+When running inside a Claude session with the Agent tool available, the orchestrator is the single entry point. It fans out to subagents in parallel waves instead of running steps sequentially.
+
+**Entry point**: `agents/orchestrator.md` (tier: mid)
+
+### Wave Plan
+
+| Wave | Agents (parallel) | Tier | Purpose |
+|------|-------------------|------|---------|
+| Wave 1 — Scan | code-style-analyzer, module-structure-analyzer | cheap | Mechanical grep-and-classify scans |
+| Wave 2 — Analysis | typing-analyzer, function-design-analyzer, data-validation-analyzer, error-handling-analyzer, testing-quality-analyzer | mid | Semantic reasoning over code |
+| Wave 3 — Report | report-writer | frontier | Cross-section score reconciliation and synthesis |
+
+### Dispatch Table
+
+| Agent file | Tier | Reference(s) covered | Artifact |
+|------------|------|----------------------|----------|
+| `agents/code-style-analyzer.md` | cheap | `references/code-style.md` (step 2) | `reports/.artifacts/python-best-practices/step_02_code_style.md` |
+| `agents/module-structure-analyzer.md` | cheap | `references/module-structure.md` (step 6) | `reports/.artifacts/python-best-practices/step_06_module_structure.md` |
+| `agents/typing-analyzer.md` | mid | `references/typing.md` (step 1) | `reports/.artifacts/python-best-practices/step_01_typing.md` |
+| `agents/function-design-analyzer.md` | mid | `references/function-design.md` (step 3) | `reports/.artifacts/python-best-practices/step_03_function_design.md` |
+| `agents/data-validation-analyzer.md` | mid | `references/data-validation.md` (step 4) | `reports/.artifacts/python-best-practices/step_04_data_validation.md` |
+| `agents/error-handling-analyzer.md` | mid | `references/error-handling.md` (step 5) | `reports/.artifacts/python-best-practices/step_05_error_handling.md` |
+| `agents/testing-quality-analyzer.md` | mid | `references/testing-quality.md` (step 7) | `reports/.artifacts/python-best-practices/step_07_testing_quality.md` |
+| `agents/report-writer.md` | frontier | `references/best-practices-format-enforcer.md` + `references/best-practices-generator.md` (steps 8–9) | `reports/python_best_practices_report.md` |
+
+> **Note**: The Rule Execution Order above is the CLI runner path (`somnio run`). The Subagent Dispatch section documents the in-session path. Both paths produce the same report at `reports/python_best_practices_report.md`.
 
 ## Standards References
 

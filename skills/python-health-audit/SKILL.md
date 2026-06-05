@@ -9,7 +9,7 @@ description: >-
   debt. Triggers on: 'python audit', 'python health audit', 'fastapi audit',
   'django audit', 'flask audit', 'tech debt assessment', 'python health',
   'python project quality', 'python quality check', 'python code review'.
-allowed-tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch, Agent
+allowed-tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch, Agent, Task
 ---
 
 # Python Project Health Audit - Modular Execution Plan
@@ -308,19 +308,19 @@ mkdir -p reports
 **Total Rules**: 13 rules
 
 **Rule Execution Order**:
-1. `references/tool-installer.md`
-2. `references/version-alignment.md` (MANDATORY - stops if interpreter alignment fails)
-3. `references/version-validator.md`
-4. `references/test-coverage.md`
-5. `references/repository-inventory.md`
-6. `references/config-analysis.md`
-7. `references/cicd-analysis.md`
-8. `references/testing-analysis.md`
-9. `references/code-quality.md`
-10. `references/api-design-analysis.md`
-11. `references/data-layer-analysis.md`
-12. `references/documentation-analysis.md`
-13. `references/report-generator.md`
+1. `references/tool-installer.md` {model: cheap}
+2. `references/version-alignment.md` (MANDATORY - stops if interpreter alignment fails) {model: cheap}
+3. `references/version-validator.md` {model: cheap}
+4. `references/test-coverage.md` {model: cheap}
+5. `references/repository-inventory.md` {model: cheap}
+6. `references/config-analysis.md` {model: cheap}
+7. `references/cicd-analysis.md` {model: cheap}
+8. `references/testing-analysis.md` {model: mid}
+9. `references/code-quality.md` {model: mid}
+10. `references/api-design-analysis.md` {model: mid}
+11. `references/data-layer-analysis.md` {model: mid}
+12. `references/documentation-analysis.md` {model: cheap}
+13. `references/report-generator.md` {model: frontier}
 
 **Wave-Based Parallel Execution**:
 - Wave 0 (Sequential): Step 0 — Environment Setup (rules 1-4)
@@ -340,6 +340,42 @@ mkdir -p reports
 - Comprehensive dependency management for monorepos
 - Complete uv interpreter alignment enforcement
 - Full project environment setup with all dependencies
+
+## Subagent Dispatch (in-session)
+
+This section describes the **in-session path** where an orchestrator subagent fans out to tiered analysis subagents using the Agent/Task tool. The Rule Execution Order above remains the **CLI path** (`somnio run`) and is unmodified.
+
+### Entry Point
+
+Invoke `agents/orchestrator.md` as the single entry point. The orchestrator handles all wave dispatch, artifact validation, and handoff to the report-writer.
+
+### Wave Plan
+
+| Wave | Mode | Agents | Tier |
+|------|------|--------|------|
+| Wave 0 | Sequential (MANDATORY gate) | `env-setup` | cheap |
+| Wave 1 | Parallel | `repository-inventory`, `config-analysis` | cheap, cheap |
+| Wave 2 | Parallel | `cicd-analysis`, `testing-analysis`, `code-quality` | cheap, mid, mid |
+| Wave 3 | Parallel | `api-design-analysis`, `data-layer-analysis` | mid, mid |
+| Wave 4 | Sequential | `documentation-analysis` | cheap |
+| Wave 5 | Sequential | `report-writer` | frontier |
+
+### Dispatch Table
+
+| Agent File | Tier | Reference(s) Covered | Artifact |
+|------------|------|----------------------|----------|
+| `agents/orchestrator.md` | mid | — (routing only) | — |
+| `agents/env-setup.md` | cheap | tool-installer, version-alignment, test-coverage | `reports/.artifacts/python_health/step_00_test_coverage.md` |
+| `agents/version-validator.md` | cheap | version-validator | `reports/.artifacts/python_health/step_00_version_validation.md` |
+| `agents/repository-inventory.md` | cheap | repository-inventory | `reports/.artifacts/python_health/step_01_repository_inventory.md` |
+| `agents/config-analysis.md` | cheap | config-analysis | `reports/.artifacts/python_health/step_02_config_analysis.md` |
+| `agents/cicd-analysis.md` | cheap | cicd-analysis | `reports/.artifacts/python_health/step_03_cicd_analysis.md` |
+| `agents/testing-analysis.md` | mid | testing-analysis | `reports/.artifacts/python_health/step_04_testing_analysis.md` |
+| `agents/code-quality.md` | mid | code-quality | `reports/.artifacts/python_health/step_05_code_quality.md` |
+| `agents/api-design-analysis.md` | mid | api-design-analysis | `reports/.artifacts/python_health/step_06_api_design_analysis.md` |
+| `agents/data-layer-analysis.md` | mid | data-layer-analysis | `reports/.artifacts/python_health/step_07_data_layer_analysis.md` |
+| `agents/documentation-analysis.md` | cheap | documentation-analysis | `reports/.artifacts/python_health/step_08_documentation_analysis.md` |
+| `agents/report-writer.md` | frontier | report-generator, report-format-enforcer | `reports/python_audit.md` |
 
 ## Report Metadata (MANDATORY)
 

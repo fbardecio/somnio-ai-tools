@@ -8,7 +8,7 @@ description: >-
   quality, validate best practices, or review frontend code standards.
   Triggers on: 'react best practices', 'react code quality', 'component review',
   'hooks review', 'react standards', 'frontend code quality'.
-allowed-tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch
+allowed-tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch, Agent
 ---
 
 # React Micro-Code Audit Plan
@@ -148,14 +148,35 @@ the template.
 `assets/report-template.md`
 
 **Rule Execution Order**:
-1.  `references/testing-quality.md`
-2.  `references/component-architecture.md`
-3.  `references/hooks-patterns.md`
-4.  `references/state-management.md`
-5.  `references/performance.md`
-6.  `references/typescript-standards.md`
-7.  `references/best-practices-format-enforcer.md`
-8.  `references/best-practices-generator.md`
+1.  `references/testing-quality.md` {model: mid}
+2.  `references/component-architecture.md` {model: mid}
+3.  `references/hooks-patterns.md` {model: mid}
+4.  `references/state-management.md` {model: mid}
+5.  `references/performance.md` {model: mid}
+6.  `references/typescript-standards.md` {model: cheap}
+7.  `references/best-practices-format-enforcer.md` {model: frontier}
+8.  `references/best-practices-generator.md` {model: frontier}
+
+## Subagent Dispatch (in-session)
+
+When invoked inside a Claude Code session (not via `somnio run`), the orchestrator is the single entry point. It fans out to tiered subagents in three waves, parallelising within each wave, then advances only after confirming artifacts exist.
+
+**Entry point**: `agents/orchestrator.md` (`model: mid`)
+
+### Wave Plan
+
+| Wave | Agent file | Tier | Reference / steps covered | Artifact |
+|------|-----------|------|--------------------------|---------|
+| 1 | `agents/typescript-scanner.md` | cheap | `references/typescript-standards.md` (scan portion) | `reports/.artifacts/react-best-practices/step_01_typescript_scan.md` |
+| 1 | `agents/architecture-scanner.md` | cheap | `references/component-architecture.md` (enumeration) | `reports/.artifacts/react-best-practices/step_02_architecture_scan.md` |
+| 2 | `agents/testing-analyzer.md` | mid | `references/testing-quality.md` | `reports/.artifacts/react-best-practices/step_03_testing_quality.md` |
+| 2 | `agents/architecture-analyzer.md` | mid | `references/component-architecture.md` (consumes step_02) | `reports/.artifacts/react-best-practices/step_04_architecture_analysis.md` |
+| 2 | `agents/hooks-analyzer.md` | mid | `references/hooks-patterns.md` | `reports/.artifacts/react-best-practices/step_05_hooks_analysis.md` |
+| 2 | `agents/state-analyzer.md` | mid | `references/state-management.md` | `reports/.artifacts/react-best-practices/step_06_state_analysis.md` |
+| 2 | `agents/performance-analyzer.md` | mid | `references/performance.md` | `reports/.artifacts/react-best-practices/step_07_performance_analysis.md` |
+| 3 | `agents/report-writer.md` | frontier | `references/best-practices-format-enforcer.md` + `references/best-practices-generator.md` + all step artifacts | `reports/react-best-practices-report.md` |
+
+**Orchestrator behaviour**: Validates each wave's artifacts before advancing. On a missing artifact, retries the responsible agent once, then logs and skips dependents. Hands the artifact manifest to the report-writer. Never reads source or writes prose.
 
 ## Standards References
 

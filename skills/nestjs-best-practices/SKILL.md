@@ -8,7 +8,7 @@ description: >-
   validate best practices, or review backend code standards.
   Triggers on: 'nestjs best practices', 'backend code quality', 'code review',
   'nestjs standards', 'dto validation', 'error handling review'.
-allowed-tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch
+allowed-tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch, Agent
 ---
 
 # NestJS Micro-Code Audit Plan
@@ -139,13 +139,43 @@ the template.
 `assets/report-template.md`
 
 **Rule Execution Order**:
-1.  `references/testing-quality.md`
-2.  `references/architecture-compliance.md`
-3.  `references/code-standards.md`
-4.  `references/dto-validation.md`
-5.  `references/error-handling.md`
-6.  `references/best-practices-format-enforcer.md`
-7.  `references/best-practices-generator.md`
+1.  `references/testing-quality.md` {model: mid}
+2.  `references/architecture-compliance.md` {model: mid}
+3.  `references/code-standards.md` {model: mid}
+4.  `references/dto-validation.md` {model: cheap}
+5.  `references/error-handling.md` {model: cheap}
+6.  `references/best-practices-format-enforcer.md` {model: frontier}
+7.  `references/best-practices-generator.md` {model: frontier}
+
+## Subagent Dispatch (in-session)
+
+This section describes the **in-session path** for Claude Code and compatible agents. The Rule Execution Order above remains the CLI path (`somnio run`). Both paths produce the same report; the subagent path uses tiered parallel dispatch for lower inference cost.
+
+**Entry point**: `agents/orchestrator.md` (model: mid)
+
+The orchestrator dispatches subagents in dependency-ordered waves. Within each wave, all agents run in parallel via the Agent tool.
+
+### Wave Plan
+
+| Wave | Agents (parallel) | Tier |
+|------|-------------------|------|
+| Wave 1 | testing-quality-analyzer, architecture-compliance-analyzer, code-standards-analyzer | mid |
+| Wave 2 | dto-validation-scanner, error-handling-scanner | cheap |
+| Wave 3 | report-writer | frontier |
+
+### Dispatch Table
+
+| Agent File | Tier | Reference Covered | Artifact |
+|------------|------|-------------------|----------|
+| `agents/orchestrator.md` | mid | — (routing only) | — |
+| `agents/testing-quality-analyzer.md` | mid | `references/testing-quality.md` | `reports/.artifacts/nestjs-best-practices/step_01_testing_quality.md` |
+| `agents/architecture-compliance-analyzer.md` | mid | `references/architecture-compliance.md` | `reports/.artifacts/nestjs-best-practices/step_02_architecture_compliance.md` |
+| `agents/code-standards-analyzer.md` | mid | `references/code-standards.md` | `reports/.artifacts/nestjs-best-practices/step_03_code_standards.md` |
+| `agents/dto-validation-scanner.md` | cheap | `references/dto-validation.md` | `reports/.artifacts/nestjs-best-practices/step_04_dto_validation.md` |
+| `agents/error-handling-scanner.md` | cheap | `references/error-handling.md` | `reports/.artifacts/nestjs-best-practices/step_05_error_handling.md` |
+| `agents/report-writer.md` | frontier | `references/best-practices-format-enforcer.md` + `references/best-practices-generator.md` | `reports/nestjs-best-practices-report.md` |
+
+The orchestrator validates each expected artifact before advancing to the next wave. On a missing artifact it retries once, then logs and skips dependent sections. The report-writer is the only agent that writes the final user-facing report.
 
 ## Standards References
 

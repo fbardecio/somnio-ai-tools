@@ -369,4 +369,49 @@ void main() {
       );
     });
   });
+
+  group('loadAgentFiles', () {
+    SkillBundle bundleWith({String? agentsDirectory}) => SkillBundle(
+          id: 'demo',
+          name: 'demo-skill',
+          displayName: 'Demo Skill',
+          description: 'A demo skill.',
+          planRelativePath: 'skills/demo-skill/SKILL.md',
+          rulesDirectory: 'skills/demo-skill/references',
+          agentsDirectory: agentsDirectory,
+        );
+
+    test('returns empty map when agentsDirectory is null', () {
+      expect(loader.loadAgentFiles(bundleWith()), isEmpty);
+    });
+
+    test('returns empty map when the directory is absent', () {
+      expect(
+        loader.loadAgentFiles(
+          bundleWith(agentsDirectory: 'skills/demo-skill/agents'),
+        ),
+        isEmpty,
+      );
+    });
+
+    test('loads top-level .md files sorted by name', () {
+      final agentsDir = Directory(
+        p.join(tmp.path, 'skills', 'demo-skill', 'agents'),
+      )..createSync(recursive: true);
+      File(p.join(agentsDir.path, 'orchestrator.md'))
+          .writeAsStringSync('orch body');
+      File(p.join(agentsDir.path, 'report-writer.md'))
+          .writeAsStringSync('writer body');
+      // Non-md file should be ignored.
+      File(p.join(agentsDir.path, 'notes.txt')).writeAsStringSync('ignore');
+
+      final result = loader.loadAgentFiles(
+        bundleWith(agentsDirectory: 'skills/demo-skill/agents'),
+      );
+
+      expect(result.keys.toList(), ['orchestrator.md', 'report-writer.md']);
+      expect(result['orchestrator.md'], 'orch body');
+      expect(result['report-writer.md'], 'writer body');
+    });
+  });
 }

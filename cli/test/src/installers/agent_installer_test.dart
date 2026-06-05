@@ -50,6 +50,28 @@ SkillBundle _seedBundle(String repoRoot, {String name = 'flutter-health'}) {
   );
 }
 
+/// Seeds a bundle that also has an `agents/` directory with one subagent file.
+SkillBundle _seedBundleWithAgents(
+  String repoRoot, {
+  String name = 'flutter-health',
+}) {
+  final base = _seedBundle(repoRoot, name: name);
+  _writeFile(
+    repoRoot,
+    'skills/$name/agents/scanner.md',
+    '---\nname: scanner\nmodel: cheap\n---\n\nScanner body.\n',
+  );
+  return SkillBundle(
+    id: base.id,
+    name: base.name,
+    displayName: base.displayName,
+    description: base.description,
+    planRelativePath: base.planRelativePath,
+    rulesDirectory: base.rulesDirectory,
+    agentsDirectory: 'skills/$name/agents',
+  );
+}
+
 void main() {
   late Directory tmp;
   late String repoRoot;
@@ -72,6 +94,7 @@ void main() {
     required InstallFormat format,
     String? executionRulesPath,
     String filePrefix = 'somnio',
+    Map<String, String> modelTiers = const {},
   }) {
     return AgentConfig(
       id: 'test-agent',
@@ -80,6 +103,7 @@ void main() {
       installPath: p.join(tmp.path, 'install'),
       executionRulesPath: executionRulesPath,
       filePrefix: filePrefix,
+      modelTiers: modelTiers,
     );
   }
 
@@ -101,6 +125,52 @@ void main() {
       expect(result.ruleCount, greaterThan(0));
       expect(result.skippedCount, 0);
       expect(result.targetDirectory, endsWith('install'));
+    });
+
+    test('skillDir format writes agents/ files with resolved tiers', () async {
+      final bundle = _seedBundleWithAgents(repoRoot);
+      final installer = AgentInstaller(
+        logger: logger,
+        loader: loader,
+        agentConfig: agentFor(
+          format: InstallFormat.skillDir,
+          modelTiers: {'cheap': 'haiku', 'mid': 'sonnet', 'frontier': 'opus'},
+        ),
+      );
+
+      await installer.install(bundles: [bundle]);
+
+      final agentFile = File(p.join(
+        tmp.path,
+        'install',
+        bundle.name,
+        'agents',
+        'scanner.md',
+      ));
+      expect(agentFile.existsSync(), isTrue);
+      // Tier resolved against the target agent's modelTiers: cheap -> haiku.
+      expect(agentFile.readAsStringSync(), contains('model: haiku'));
+    });
+
+    test('non-skillDir formats skip agents/ files', () async {
+      final bundle = _seedBundleWithAgents(repoRoot);
+      // markdown transformer does not emit agents/, and the installer also
+      // guards against writing them for non-skillDir formats.
+      final installer = AgentInstaller(
+        logger: logger,
+        loader: loader,
+        agentConfig: agentFor(format: InstallFormat.markdown),
+      );
+
+      await installer.install(bundles: [bundle]);
+
+      final agentDir = Directory(p.join(
+        tmp.path,
+        'install',
+        bundle.name,
+        'agents',
+      ));
+      expect(agentDir.existsSync(), isFalse);
     });
 
     test('skips bundles when the transformer returns skipped (workflow, '
