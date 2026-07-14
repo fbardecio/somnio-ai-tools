@@ -31,7 +31,7 @@ void main() {
   /// Expected step counts and first/last rule names per skill.
   final expectations = <String, _SkillExpectation>{
     'flutter-health-audit': _SkillExpectation(
-      stepCount: 11,
+      stepCount: 12,
       firstRule: 'tool-installer',
       lastRule: 'report-generator',
       mandatoryRules: ['version-alignment'],
@@ -43,7 +43,7 @@ void main() {
       mandatoryRules: [],
     ),
     'nestjs-health-audit': _SkillExpectation(
-      stepCount: 13,
+      stepCount: 14,
       firstRule: 'tool-installer',
       lastRule: 'report-generator',
       mandatoryRules: ['version-alignment'],
@@ -61,7 +61,13 @@ void main() {
       mandatoryRules: ['tool-installer'],
     ),
     'python-health-audit': _SkillExpectation(
-      stepCount: 13,
+      stepCount: 14,
+      firstRule: 'tool-installer',
+      lastRule: 'report-generator',
+      mandatoryRules: ['version-alignment'],
+    ),
+    'react-health-audit': _SkillExpectation(
+      stepCount: 14,
       firstRule: 'tool-installer',
       lastRule: 'report-generator',
       mandatoryRules: ['version-alignment'],
@@ -138,9 +144,49 @@ void main() {
               'reference file not found: ${refFile.path}',
         );
       }
+
+      // The new AI Harness & Adoption step must resolve `model: mid` and
+      // must not be null — this is the thing most likely to fail silently
+      // if the rule line ever wraps and swallows the `{model: ...}` token
+      // (see spec.md §7 / §10).
+      if (_harnessAuditSkills.contains(skillName)) {
+        final harnessStep = steps.firstWhere(
+          (s) => s.ruleName == 'harness-analysis',
+          orElse: () => throw StateError(
+            '$skillName: expected "harness-analysis" step not found',
+          ),
+        );
+        expect(
+          harnessStep.model,
+          isNotNull,
+          reason: '$skillName: harness-analysis step must have a resolved '
+              'model tier (got null — the {model: ...} token was likely '
+              'swallowed by a wrapped line)',
+        );
+        expect(
+          harnessStep.model,
+          'mid',
+          reason: '$skillName: harness-analysis step must resolve '
+              'model: mid',
+        );
+        // Must remain immediately before the generator, per spec §7.
+        expect(
+          steps.last.ruleName,
+          'report-generator',
+          reason: '$skillName: report-generator must still be last',
+        );
+      }
     });
   }
 }
+
+/// Skills that ship the AI Harness & Adoption rubric (spec.md §4).
+const _harnessAuditSkills = {
+  'flutter-health-audit',
+  'nestjs-health-audit',
+  'python-health-audit',
+  'react-health-audit',
+};
 
 class _SkillExpectation {
   const _SkillExpectation({

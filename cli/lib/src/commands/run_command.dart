@@ -14,6 +14,7 @@ import '../runner/agent_resolver.dart';
 import '../runner/plan_parser.dart';
 import '../runner/preflight.dart';
 import '../runner/project_validator.dart';
+import '../runner/rule_names.dart';
 import '../runner/run_config.dart';
 import '../runner/step_executor.dart';
 import '../utils/command_helpers.dart';
@@ -407,10 +408,14 @@ class RunCommand extends Command<int> {
       return _ExecuteBundleResult(aborted: true);
     }
 
-    final preflightRuleNames = preflightResultForSteps.artifacts.keys.toSet();
+    final preflightArtifactKeys =
+        preflightResultForSteps.artifacts.keys.toSet();
     final ruleNames = steps
         .map((s) => s.ruleName)
-        .where((name) => !preflightRuleNames.contains(name))
+        .where(
+          (name) =>
+              !preflightArtifactKeys.contains(preflightKey(techPrefix, name)),
+        )
         .toList();
     if (ruleNames.isNotEmpty) {
       final verifyError = agentResolver.verifyInstallation(
@@ -447,7 +452,10 @@ class RunCommand extends Command<int> {
 
     final agentName = agent.displayName;
     final preflightCount = steps
-        .where((s) => preflightResultForSteps.artifacts.containsKey(s.ruleName))
+        .where(
+          (s) => preflightResultForSteps.artifacts
+              .containsKey(preflightKey(techPrefix, s.ruleName)),
+        )
         .length;
     final aiCount = steps.length - preflightCount;
     _logger.info('');
@@ -475,15 +483,15 @@ class RunCommand extends Command<int> {
       );
 
       StepResult stepResult;
-      final preflightArtifact =
-          preflightResultForSteps.artifacts[step.ruleName];
+      final preflightArtifact = preflightResultForSteps
+          .artifacts[preflightKey(techPrefix, step.ruleName)];
 
       if (preflightArtifact != null) {
         stepResult = await executor.writePreflightArtifact(
           step,
           preflightArtifact,
         );
-      } else if (step.ruleName.endsWith('_report_generator')) {
+      } else if (step.ruleName == kReportGeneratorRuleName) {
         stepResult = await executor.executeReportGenerator(step);
       } else {
         stepResult = await executor.execute(step);
@@ -504,11 +512,8 @@ class RunCommand extends Command<int> {
           );
         }
 
-        if (step.ruleName.endsWith('_report_generator')) {
-          final enforcerRuleName = step.ruleName.replaceFirst(
-            '_report_generator',
-            '_report_format_enforcer',
-          );
+        if (step.ruleName == kReportGeneratorRuleName) {
+          const enforcerRuleName = kReportFormatEnforcerRuleName;
           final enforcerProgress = _logger.progress(
             'Step ${step.index}/${steps.length}: format enforcement',
           );

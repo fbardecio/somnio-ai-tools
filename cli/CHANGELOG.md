@@ -5,6 +5,19 @@ All notable changes to the Somnio CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-07-14
+
+### Added
+
+- **AI Harness & Adoption audit section**: All four health audits (`flutter-health-audit`, `nestjs-health-audit`, `python-health-audit`, `react-health-audit`) now score a 9th dimension — `CLAUDE.md`, `.claude/rules/`, `settings.json` permissions and hooks, custom agents, commands/skills, the pre-push git hook, advanced orchestration, and lifecycle/versioning — via a new `harness-analyzer` subagent (`model: mid`) and shared `references/harness-analysis.md` rubric (100 points across 9 dimensions, existence + quality split). Weighted at 0.10, with the existing 8 sections rescaled to sum to 0.90.
+
+### Fixed
+
+- **Runner report-generator dispatch (Phase 0)**: `somnio run` compared `step.ruleName.endsWith('_report_generator')` against rule names that are always hyphenated (`report-generator`), so the comparison never matched — `executeReportGenerator()` and the follow-on format-enforcer pass were unreachable, and every audit silently skipped enforcement. Fixed to compare against the exact rule name via a new `kReportGeneratorRuleName` / `kReportFormatEnforcerRuleName` constant.
+- **Runner pre-flight artifact lookup (Phase 0)**: pre-flight artifacts were written with an underscore-joined `<techPrefix>_<rule_name>` key but looked up by bare rule name, so `flutter`/`nestjs`/`security` pre-flight steps (tool install, version checks, etc.) never matched their cached artifact and were always re-executed through the AI instead of reusing the deterministic pre-flight result. Fixed via a new pure, tested `preflightKey()` helper in `cli/lib/src/runner/rule_names.dart`, used at all three lookup sites in `run_command.dart`.
+- **Rubrics no longer hardcode invoker-specific artifact paths**: the shared `references/` rubrics of the four health audits hardcoded the in-session artifact path (e.g. `reports/.artifacts/flutter_health/step_07_harness_analysis.md`), contradicting the CLI runner's own path convention (`step_{plan-index}_{rule-with-hyphens}.md` per `_artifactPath()`) when run via `somnio run`. Rubrics now defer to the path the invoker names; report generators locate the coverage/harness artifacts by glob (`step_*_test?coverage.md`) instead of an exact filename.
+- **`SOMNIO_ARTIFACT_FILE` exported to step processes**: `StepExecutor` now exports the step's artifact path as the `SOMNIO_ARTIFACT_FILE` environment variable when spawning the AI CLI, so bash scripts embedded in rule files (e.g. the Python coverage runner) resolve the CLI's artifact path deterministically instead of relying on the model substituting it. In-session dispatch leaves the variable unset and falls back to the Dispatch Table path.
+
 ## [2.6.0] - 2026-06-04
 
 ### Added

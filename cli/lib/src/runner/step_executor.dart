@@ -8,6 +8,14 @@ import 'package:path/path.dart' as p;
 import '../version.dart';
 import 'run_config.dart';
 
+/// Signature for spawning an AI CLI process. Matches [Process.run].
+typedef ProcessRunner = Future<ProcessResult> Function(
+  String executable,
+  List<String> arguments, {
+  String? workingDirectory,
+  Map<String, String>? environment,
+});
+
 /// Token usage statistics from an AI CLI invocation.
 class TokenUsage {
   const TokenUsage({
@@ -57,10 +65,12 @@ class StepExecutor {
   StepExecutor({
     required this.config,
     required this.logger,
-  });
+    ProcessRunner? processRunner,
+  }) : _processRunner = processRunner ?? Process.run;
 
   final RunConfig config;
   final Logger logger;
+  final ProcessRunner _processRunner;
 
   /// Fallback model to use when the primary model hits quota limits.
   ///
@@ -104,7 +114,11 @@ class StepExecutor {
     final baseModel = _stepBaseModel(step);
 
     try {
-      var result = await _runProcess(prompt, modelOverride: baseModel);
+      var result = await _runProcess(
+        prompt,
+        modelOverride: baseModel,
+        artifactPath: artifactPath,
+      );
 
       // Fallback: retry with cheapest model on quota/capacity errors
       if (result.exitCode != 0 &&
@@ -115,7 +129,11 @@ class StepExecutor {
           '  Quota exceeded for "$baseModel", '
           'retrying with "$fallbackModel"...',
         );
-        result = await _runProcess(prompt, modelOverride: fallbackModel);
+        result = await _runProcess(
+          prompt,
+          modelOverride: fallbackModel,
+          artifactPath: artifactPath,
+        );
       }
 
       stopwatch.stop();
@@ -487,14 +505,28 @@ class StepExecutor {
         'IMPORTANT: You MUST write the result to the file above.';
   }
 
-  Future<ProcessResult> _runProcess(String prompt, {String? modelOverride}) {
+  /// Spawns the AI CLI process for a step.
+  ///
+  /// When [artifactPath] is provided, it is exported as the
+  /// `SOMNIO_ARTIFACT_FILE` environment variable so that shell scripts
+  /// embedded in rule files can resolve the artifact path without relying
+  /// on the model substituting it into the script. The parent environment
+  /// is preserved (merged), not replaced.
+  Future<ProcessResult> _runProcess(
+    String prompt, {
+    String? modelOverride,
+    String? artifactPath,
+  }) {
     final model = modelOverride ?? config.model;
     final agent = config.agentConfig;
     final args = agent.buildArgs(prompt, model: model);
-    return Process.run(
+    return _processRunner(
       agent.binary!,
       args,
       workingDirectory: Directory.current.path,
+      environment: artifactPath == null
+          ? null
+          : {'SOMNIO_ARTIFACT_FILE': artifactPath},
     );
   }
 

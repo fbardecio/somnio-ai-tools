@@ -13,7 +13,7 @@ void main() {
     // Real SKILL.md tests — one per runnable skill
     // ---------------------------------------------------------------
 
-    test('flutter-health-audit (fh): verbose format, 11 steps', () {
+    test('flutter-health-audit (fh): verbose format, 12 steps', () {
       const plan = '''
 **Rule Execution Order**:
 1. Read and follow the instructions in `references/tool-installer.md`
@@ -27,14 +27,15 @@ void main() {
 8. Read and follow the instructions in `references/testing-analysis.md`
 9. Read and follow the instructions in `references/code-quality.md`
 10. Read and follow the instructions in `references/documentation-analysis.md`
-11. Read and follow the instructions in `references/report-generator.md`
+11. Read and follow the instructions in `references/harness-analysis.md` {model: mid}
+12. Read and follow the instructions in `references/report-generator.md`
 
 **Benefits of Modular Approach**:
 ''';
 
       final steps = parser.parse(plan);
 
-      expect(steps, hasLength(11));
+      expect(steps, hasLength(12));
       expect(steps[0].ruleName, 'tool-installer');
       expect(steps[0].isMandatory, false);
       expect(steps[1].ruleName, 'version-alignment');
@@ -47,8 +48,10 @@ void main() {
       expect(steps[7].ruleName, 'testing-analysis');
       expect(steps[8].ruleName, 'code-quality');
       expect(steps[9].ruleName, 'documentation-analysis');
-      expect(steps[10].ruleName, 'report-generator');
-      expect(steps[10].index, 11);
+      expect(steps[10].ruleName, 'harness-analysis');
+      expect(steps[10].model, 'mid');
+      expect(steps[11].ruleName, 'report-generator');
+      expect(steps[11].index, 12);
     });
 
     test('flutter-best-practices (fp): verbose format, 5 steps', () {
@@ -73,7 +76,7 @@ void main() {
       expect(steps[4].ruleName, 'best-practices-generator');
     });
 
-    test('nestjs-health-audit (nh): short format, 13 steps', () {
+    test('nestjs-health-audit (nh): short format, 14 steps', () {
       const plan = '''
 **Rule Execution Order**:
 1. `references/tool-installer.md`
@@ -88,21 +91,24 @@ void main() {
 10. `references/api-design-analysis.md`
 11. `references/data-layer-analysis.md`
 12. `references/documentation-analysis.md`
-13. `references/report-generator.md`
+13. Read and follow the instructions in `references/harness-analysis.md` {model: mid}
+14. `references/report-generator.md`
 
 **Benefits of Modular Approach**:
 ''';
 
       final steps = parser.parse(plan);
 
-      expect(steps, hasLength(13));
+      expect(steps, hasLength(14));
       expect(steps[0].ruleName, 'tool-installer');
       expect(steps[1].ruleName, 'version-alignment');
       expect(steps[1].isMandatory, true);
       expect(steps[9].ruleName, 'api-design-analysis');
       expect(steps[10].ruleName, 'data-layer-analysis');
-      expect(steps[12].ruleName, 'report-generator');
-      expect(steps[12].index, 13);
+      expect(steps[12].ruleName, 'harness-analysis');
+      expect(steps[12].model, 'mid');
+      expect(steps[13].ruleName, 'report-generator');
+      expect(steps[13].index, 14);
     });
 
     test('nestjs-best-practices (np): short format with double spaces, 7 steps',

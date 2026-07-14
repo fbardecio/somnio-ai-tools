@@ -29,7 +29,7 @@ You are a master at:
   performance, CI/CD, documentation)
 - **Evidence-Based Analysis**: Analyzing repository evidence objectively
   without inventing data or making assumptions
-- **Modular Rule Execution**: Coordinating sequential execution of 13
+- **Modular Rule Execution**: Coordinating sequential execution of 14
   specialized analysis rules
 - **Score Calculation**: Calculating section scores (0-100) and weighted
   overall scores accurately
@@ -144,7 +144,7 @@ provide resolution steps.
 
 ## Parallel Execution Strategy
 
-Steps 1-7 can be partially parallelized using the Agent tool to launch
+Steps 1-8 can be partially parallelized using the Agent tool to launch
 multiple analysis agents simultaneously. Use the following wave structure:
 
 **Wave 0 (Sequential - MANDATORY)**: Step 0 — Environment Setup
@@ -153,16 +153,17 @@ multiple analysis agents simultaneously. Use the following wave structure:
 **Wave 1 (Parallel)**: Steps 1 + 2 — Repository Inventory + Configuration Analysis
   Launch both as parallel agents. Both read from the filesystem independently.
 
-**Wave 2 (Parallel)**: Steps 3 + 4 + 5 — CI/CD + Testing + Code Quality
-  Launch all three as parallel agents. Independent read-only analyses.
+**Wave 2 (Parallel)**: Steps 3 + 4 + 5 + 8 — CI/CD + Testing + Code Quality + AI Harness & Adoption
+  Launch all four as parallel agents. Independent read-only analyses; the
+  AI Harness & Adoption step depends on no prior artifact.
 
 **Wave 3 (Parallel)**: Steps 6 + 7 — State Management + Documentation
   Launch both as parallel agents. Independent analyses.
 
-**Wave 4 (Sequential)**: Step 8 — Report Format Enforcement
+**Wave 4 (Sequential)**: Step 9 — Report Format Enforcement
   Can run after all analysis waves complete.
 
-**Wave 5 (Sequential)**: Steps 9 + 10 — Report Generation + Export
+**Wave 5 (Sequential)**: Steps 10 + 11 — Report Generation + Export
   Must run last — requires ALL previous results.
 
 **Agent Launch Pattern**: For each parallel wave, use the Agent tool to
@@ -246,7 +247,19 @@ integration, and environment setup.
 **Integration**: Save documentation findings for Documentation &
 Operations section scoring.
 
-## Step 8. Report Format Enforcement
+## Step 8. AI Harness & Adoption Analysis
+
+Goal: Analyze the project's AI harness — CLAUDE.md, `.claude/rules/`,
+`settings.json` permissions and hooks, `.claude/agents/`,
+commands/skills, and the pre-push git hook — judging quality, not
+just presence, against the 9-dimension, 100-point rubric.
+
+**Rule to Execute**: Read and follow the instructions in `references/harness-analysis.md`
+
+**Integration**: Save the AI Harness & Adoption findings, score, and
+maturity band for the AI Harness & Adoption section scoring.
+
+## Step 9. Report Format Enforcement
 
 Goal: Enforce the standardized report format structure before final
 report generation.
@@ -255,7 +268,7 @@ report generation.
 
 **Integration**: Apply format constraints for the final report generation.
 
-## Step 9. Generate Final Report
+## Step 10. Generate Final Report
 
 Goal: Generate the final React Project Health Audit report by
 integrating all analysis results.
@@ -267,17 +280,17 @@ generates the final report.
 
 **Report Sections**:
 - Executive Summary with overall score
-- At-a-Glance Scorecard with all 8 section scores
-- All 8 detailed sections (Tech Stack, Architecture, State Management,
+- At-a-Glance Scorecard with all 9 section scores
+- All 9 detailed sections (Tech Stack, Architecture, State Management,
   Testing, Code Quality, Performance, Documentation &
-  Operations, CI/CD)
+  Operations, CI/CD, AI Harness & Adoption)
 - Additional Metrics (including coverage percentages)
 - Quality Index
 - Risks & Opportunities (5-8 bullets)
 - Recommendations (6-10 prioritized actions)
 - Appendix: Evidence Index
 
-## Step 10. Export Final Report
+## Step 11. Export Final Report
 
 Goal: Save the final Google Docs-ready Markdown report to the reports
 directory.
@@ -299,7 +312,7 @@ mkdir -p reports
 
 ## Execution Summary
 
-**Total Rules**: 13 rules
+**Total Rules**: 14 rules
 
 **Rule Execution Order**:
 1. `references/tool-installer.md` {model: cheap}
@@ -313,16 +326,17 @@ mkdir -p reports
 9. `references/code-quality.md` {model: mid}
 10. `references/state-management-analysis.md` {model: mid}
 11. `references/documentation-analysis.md` {model: cheap}
-12. `references/report-format-enforcer.md` {model: frontier}
-13. `references/report-generator.md` {model: frontier}
+12. Read and follow the instructions in `references/harness-analysis.md` {model: mid}
+13. `references/report-format-enforcer.md` {model: frontier}
+14. `references/report-generator.md` {model: frontier}
 
 **Wave-Based Parallel Execution**:
 - Wave 0 (Sequential): Step 0 — Environment Setup (rules 1-4)
 - Wave 1 (Parallel): Steps 1 + 2 — Repository Inventory + Configuration (rules 5-6)
-- Wave 2 (Parallel): Steps 3 + 4 + 5 — CI/CD + Testing + Code Quality (rules 7-9)
+- Wave 2 (Parallel): Steps 3 + 4 + 5 + 8 — CI/CD + Testing + Code Quality + AI Harness & Adoption (rules 7-9, 12)
 - Wave 3 (Parallel): Steps 6 + 7 — State Management + Documentation (rules 10-11)
-- Wave 4 (Sequential): Step 8 — Report Format Enforcement (rule 12)
-- Wave 5 (Sequential): Steps 9 + 10 — Report Generation + Export (rule 13)
+- Wave 4 (Sequential): Step 9 — Report Format Enforcement (rule 13)
+- Wave 5 (Sequential): Steps 10 + 11 — Report Generation + Export (rule 14)
 
 ## Subagent Dispatch (in-session)
 
@@ -336,7 +350,7 @@ This section describes the **in-session path** when Claude Code dispatches subag
 |------|------|-------------------|------|
 | Wave 0 | Sequential — MANDATORY gate | `env-setup-agent` | cheap |
 | Wave 1 | Parallel | `repo-analyzer`, `config-analyzer` | cheap, cheap |
-| Wave 2 | Parallel | `cicd-analyzer`, `testing-analyzer`, `code-quality-analyzer` | cheap, mid, mid |
+| Wave 2 | Parallel | `cicd-analyzer`, `testing-analyzer`, `code-quality-analyzer`, `harness-analyzer` | cheap, mid, mid, mid |
 | Wave 3 | Parallel | `state-management-analyzer`, `docs-analyzer` | mid, cheap |
 | Wave 4 | Sequential | `report-writer` | frontier |
 
@@ -354,6 +368,7 @@ Wave 0 emits a GATE status; the orchestrator halts all subsequent waves on `GATE
 | `agents/code-quality-analyzer.md` | mid | code-quality | `reports/.artifacts/react-health-audit/step_05_code_quality.md` |
 | `agents/state-management-analyzer.md` | mid | state-management-analysis | `reports/.artifacts/react-health-audit/step_06_state_management.md` |
 | `agents/docs-analyzer.md` | cheap | documentation-analysis | `reports/.artifacts/react-health-audit/step_07_documentation.md` |
+| `agents/harness-analyzer.md` | mid | harness-analysis | `reports/.artifacts/react-health-audit/step_08_harness_analysis.md` |
 | `agents/orchestrator.md` | mid | (routing only — reads no reference) | n/a |
 | `agents/report-writer.md` | frontier | report-generator, report-format-enforcer | `reports/react_audit.md` |
 

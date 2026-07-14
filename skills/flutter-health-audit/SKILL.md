@@ -29,7 +29,7 @@ You are a master at:
   documentation)
 - **Evidence-Based Analysis**: Analyzing repository evidence objectively
   without inventing data or making assumptions
-- **Modular Rule Execution**: Coordinating sequential execution of 11
+- **Modular Rule Execution**: Coordinating sequential execution of 12
   specialized analysis rules
 - **Score Calculation**: Calculating section scores (0-100) and weighted
   overall scores accurately
@@ -54,7 +54,7 @@ You are a master at:
 - **Explicit Documentation**: Document what was checked, what was found,
   and what is missing
 - **User Interaction**: Only interact with user when explicitly required
-  (Step 8 - Best Practices Check prompt)
+  (Step 10 - Best Practices Check prompt)
 - **Error Handling**: Stop execution on MANDATORY step failures;
   continue with warnings for non-critical issues
 - **No Assumptions**: If something cannot be proven by repository
@@ -151,7 +151,7 @@ and provide resolution steps.
 
 ## Parallel Execution Strategy
 
-Steps 1-6 can be partially parallelized using the Agent tool to launch
+Steps 1-7 can be partially parallelized using the Agent tool to launch
 multiple analysis agents simultaneously. Use the following wave structure:
 
 **Wave 0 (Sequential - MANDATORY)**: Step 0 — Environment Setup
@@ -160,13 +160,14 @@ multiple analysis agents simultaneously. Use the following wave structure:
 **Wave 1 (Parallel)**: Steps 1 + 2 — Repository Inventory + Configuration Analysis
   Launch both as parallel agents. Both read from the filesystem independently.
 
-**Wave 2 (Parallel)**: Steps 3 + 4 + 5 — CI/CD + Testing + Code Quality
-  Launch all three as parallel agents. Independent read-only analyses.
+**Wave 2 (Parallel)**: Steps 3 + 4 + 5 + 7 — CI/CD + Testing + Code Quality + AI Harness & Adoption
+  Launch all four as parallel agents. Independent read-only analyses. Step 7
+  depends on no prior artifact, so it joins this wave without adding a new one.
 
 **Wave 3 (Sequential)**: Step 6 — Documentation Analysis
   Can run after all analysis waves complete.
 
-**Wave 4 (Sequential)**: Steps 7 + 8 — Report Generation + Export
+**Wave 4 (Sequential)**: Steps 8 + 9 — Report Generation + Export
   Must run last — requires ALL previous results.
 
 **Agent Launch Pattern**: For each parallel wave, use the Agent tool to
@@ -237,7 +238,19 @@ environment setup (no operational/runbook content).
 **Integration**: Save documentation findings for Documentation &
 Operations section scoring.
 
-## Step 7. Generate Final Report
+## Step 7. AI Harness & Adoption Analysis
+
+Goal: Score the project's AI harness — CLAUDE.md, `.claude/rules/`,
+`.claude/settings.json` permissions and hooks, `.claude/agents/`,
+commands/skills — and the pre-push git hook, on quality, not just
+presence.
+
+**Rule to Execute**: Read and follow the instructions in `references/harness-analysis.md`
+
+**Integration**: Save AI Harness & Adoption findings for the AI
+Harness & Adoption section scoring.
+
+## Step 8. Generate Final Report
 
 Goal: Generate the final Flutter Project Health Audit report by
 integrating all analysis results.
@@ -249,17 +262,17 @@ generates the final report.
 
 **Report Sections**:
 - Executive Summary with overall score
-- At-a-Glance Scorecard with all 8 section scores
-- All 8 detailed sections (Tech Stack, Architecture, State Management,
+- At-a-Glance Scorecard with all 9 section scores
+- All 9 detailed sections (Tech Stack, Architecture, State Management,
   Repositories & Data Layer, Testing, Code Quality,
-  Documentation & Operations, CI/CD)
+  Documentation & Operations, CI/CD, AI Harness & Adoption)
 - Additional Metrics (including coverage percentages)
 - Quality Index
 - Risks & Opportunities (5-8 bullets)
 - Recommendations (6-10 prioritized actions)
 - Appendix: Evidence Index
 
-## Step 8. Export Final Report
+## Step 9. Export Final Report
 
 Goal: Save the final Google Docs-ready Markdown report to the reports
 directory.
@@ -277,9 +290,9 @@ mkdir -p reports
 # Save report content to ./reports/flutter_audit.md
 ```
 
-## Step 9. Optional Best Practices Check Prompt
+## Step 10. Optional Best Practices Check Prompt
 
-**CRITICAL**: After completing Step 8, you MUST ask the user if they
+**CRITICAL**: After completing Step 9, you MUST ask the user if they
 want to execute the Best Practices Check plan. **NEVER execute it
 automatically**.
 
@@ -330,12 +343,11 @@ Type 'yes' or 'y' to proceed, or 'no' or 'n' to skip.
 
 ## Execution Summary
 
-**Total Rules**: 11 rules
+**Total Rules**: 12 rules
 
 **Rule Execution Order**:
 1. Read and follow the instructions in `references/tool-installer.md` {model: cheap}
-2. Read and follow the instructions in `references/version-alignment.md` (MANDATORY - stops if FVM global
-   fails) {model: cheap}
+2. Read and follow the instructions in `references/version-alignment.md` (MANDATORY - stops if FVM global fails) {model: cheap}
 3. Read and follow the instructions in `references/version-validator.md` (verification of FVM global setup) {model: cheap}
 4. Read and follow the instructions in `references/test-coverage.md` (coverage generation) {model: cheap}
 5. Read and follow the instructions in `references/repository-inventory.md` {model: cheap}
@@ -344,14 +356,15 @@ Type 'yes' or 'y' to proceed, or 'no' or 'n' to skip.
 8. Read and follow the instructions in `references/testing-analysis.md` {model: mid}
 9. Read and follow the instructions in `references/code-quality.md` {model: mid}
 10. Read and follow the instructions in `references/documentation-analysis.md` {model: cheap}
-11. Read and follow the instructions in `references/report-generator.md` {model: frontier}
+11. Read and follow the instructions in `references/harness-analysis.md` {model: mid}
+12. Read and follow the instructions in `references/report-generator.md` {model: frontier}
 
 **Wave-Based Parallel Execution**:
 - Wave 0 (Sequential): Step 0 — Environment Setup (rules 1-4)
 - Wave 1 (Parallel): Steps 1 + 2 — Repository Inventory + Configuration (rules 5-6)
-- Wave 2 (Parallel): Steps 3 + 4 + 5 — CI/CD + Testing + Code Quality (rules 7-9)
+- Wave 2 (Parallel): Steps 3 + 4 + 5 + 7 — CI/CD + Testing + Code Quality + AI Harness & Adoption (rules 7-9, 11)
 - Wave 3 (Sequential): Step 6 — Documentation (rule 10)
-- Wave 4 (Sequential): Steps 7 + 8 — Report Generation + Export (rule 11)
+- Wave 4 (Sequential): Steps 8 + 9 — Report Generation + Export (rule 12)
 
 ## Subagent Dispatch (in-session)
 
@@ -365,7 +378,7 @@ When executed inside a Claude Code session (not via `somnio run`), the audit is 
 |------|------|-------------------|------|
 | Wave 0 | Sequential (MANDATORY stop-on-failure) | `env-setup` | cheap |
 | Wave 1 | Parallel | `repo-analyzer`, `config-analyzer` | cheap, cheap |
-| Wave 2 | Parallel | `cicd-analyzer`, `testing-analyzer`, `code-quality-analyzer` | mid, mid, mid |
+| Wave 2 | Parallel | `cicd-analyzer`, `testing-analyzer`, `code-quality-analyzer`, `harness-analyzer` | mid, mid, mid, mid |
 | Wave 3 | Sequential | `docs-analyzer` | cheap |
 | Wave 4 | Sequential | `report-writer` | frontier |
 
@@ -380,6 +393,7 @@ When executed inside a Claude Code session (not via `somnio run`), the audit is 
 | `agents/testing-analyzer.md` | mid | `references/testing-analysis.md` | `reports/.artifacts/flutter_health/step_04_testing_analysis.md` |
 | `agents/code-quality-analyzer.md` | mid | `references/code-quality.md` | `reports/.artifacts/flutter_health/step_05_code_quality.md` |
 | `agents/docs-analyzer.md` | cheap | `references/documentation-analysis.md` | `reports/.artifacts/flutter_health/step_06_documentation_analysis.md` |
+| `agents/harness-analyzer.md` | mid | `references/harness-analysis.md` | `reports/.artifacts/flutter_health/step_07_harness_analysis.md` |
 | `agents/report-writer.md` | frontier | `references/report-generator.md`, `references/report-format-enforcer.md`, `assets/report-template.md` | `reports/flutter_audit.md` |
 
 **Orchestrator rules**:
