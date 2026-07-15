@@ -31,13 +31,21 @@ void main() {
   /// Expected step counts and first/last rule names per skill.
   final expectations = <String, _SkillExpectation>{
     'flutter-health-audit': _SkillExpectation(
-      stepCount: 12,
+      // 13, not 12: state-management-analysis was added as step 10 to
+      // produce evidence for the mandatory "State Management" report
+      // section (mirrors react-health-audit's numbering).
+      stepCount: 13,
       firstRule: 'tool-installer',
       lastRule: 'report-generator',
       mandatoryRules: ['version-alignment'],
     ),
+    // 4, not 5: the numbered best-practices-format-enforcer step was removed.
+    // The runner auto-applies the enforcer after the generator writes the
+    // report (RunCommand._executeBundle keys it off formatEnforcerRuleFor),
+    // so numbering it ran it twice — once against a report that did not yet
+    // exist. Health audits already omit their enforcer for the same reason.
     'flutter-best-practices': _SkillExpectation(
-      stepCount: 5,
+      stepCount: 4,
       firstRule: 'testing-quality',
       lastRule: 'best-practices-generator',
       mandatoryRules: [],
@@ -49,7 +57,7 @@ void main() {
       mandatoryRules: ['version-alignment'],
     ),
     'nestjs-best-practices': _SkillExpectation(
-      stepCount: 7,
+      stepCount: 6,
       firstRule: 'testing-quality',
       lastRule: 'best-practices-generator',
       mandatoryRules: [],
@@ -67,14 +75,22 @@ void main() {
       mandatoryRules: ['version-alignment'],
     ),
     'react-health-audit': _SkillExpectation(
-      stepCount: 14,
+      // 13, not 14: report-format-enforcer is no longer a numbered rule —
+      // it is auto-applied by the runner's format-enforcer pass.
+      stepCount: 13,
       firstRule: 'tool-installer',
       lastRule: 'report-generator',
       mandatoryRules: ['version-alignment'],
     ),
     'python-best-practices': _SkillExpectation(
-      stepCount: 9,
+      stepCount: 8,
       firstRule: 'typing',
+      lastRule: 'best-practices-generator',
+      mandatoryRules: [],
+    ),
+    'react-best-practices': _SkillExpectation(
+      stepCount: 7,
+      firstRule: 'testing-quality',
       lastRule: 'best-practices-generator',
       mandatoryRules: [],
     ),

@@ -1,3 +1,9 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+import 'package:somnio/src/content/content_loader.dart';
+import 'package:somnio/src/content/skill_registry.dart';
+import 'package:somnio/src/runner/plan_parser.dart';
 import 'package:somnio/src/runner/rule_names.dart';
 import 'package:test/test.dart';
 
@@ -52,6 +58,42 @@ void main() {
         preflightKey('flutter', 'testcoverage'),
         'flutter_testcoverage',
       );
+    });
+  });
+
+  group('generator dispatch covers every runnable bundle', () {
+    // Regression test for a bug that shipped twice: kReportGeneratorRuleName
+    // only matched the health-audit bundles' `report-generator` step, so the
+    // `*_plan` bundles' `best-practices-generator` terminal step silently
+    // fell through to the regular `execute()` path and never wrote
+    // `RunConfig.reportPath`. Asserting against the real PlanParser output
+    // (not just the constants) is what would have caught it.
+    test('every runnable bundle\'s terminal step dispatches to the generator',
+        () {
+      var repoRoot = p.dirname(Directory.current.path);
+      if (!File(p.join(repoRoot, 'skills', 'flutter-health-audit', 'SKILL.md'))
+          .existsSync()) {
+        // Fallback: maybe tests run from repo root
+        repoRoot = Directory.current.path;
+      }
+      final loader = ContentLoader(repoRoot);
+      final parser = PlanParser();
+      final runnable = SkillRegistry.skills.where(
+        (b) =>
+            b.id.endsWith('_health') ||
+            b.id.endsWith('_plan') ||
+            b.id.endsWith('_audit'),
+      );
+      for (final b in runnable) {
+        final last = parser.parse(loader.loadPlan(b)).last.ruleName;
+        expect(
+          isReportGeneratorRule(last),
+          isTrue,
+          reason: '${b.id}: terminal step "$last" would skip '
+              'executeReportGenerator and never write reportPath',
+        );
+        expect(formatEnforcerRuleFor(last), isNotNull, reason: b.id);
+      }
     });
   });
 }

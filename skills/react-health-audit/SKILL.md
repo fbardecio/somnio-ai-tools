@@ -29,7 +29,7 @@ You are a master at:
   performance, CI/CD, documentation)
 - **Evidence-Based Analysis**: Analyzing repository evidence objectively
   without inventing data or making assumptions
-- **Modular Rule Execution**: Coordinating sequential execution of 14
+- **Modular Rule Execution**: Coordinating sequential execution of 13
   specialized analysis rules
 - **Score Calculation**: Calculating section scores (0-100) and weighted
   overall scores accurately
@@ -160,10 +160,7 @@ multiple analysis agents simultaneously. Use the following wave structure:
 **Wave 3 (Parallel)**: Steps 6 + 7 — State Management + Documentation
   Launch both as parallel agents. Independent analyses.
 
-**Wave 4 (Sequential)**: Step 9 — Report Format Enforcement
-  Can run after all analysis waves complete.
-
-**Wave 5 (Sequential)**: Steps 10 + 11 — Report Generation + Export
+**Wave 4 (Sequential)**: Steps 9 + 10 — Report Generation + Export
   Must run last — requires ALL previous results.
 
 **Agent Launch Pattern**: For each parallel wave, use the Agent tool to
@@ -259,16 +256,7 @@ just presence, against the 9-dimension, 100-point rubric.
 **Integration**: Save the AI Harness & Adoption findings, score, and
 maturity band for the AI Harness & Adoption section scoring.
 
-## Step 9. Report Format Enforcement
-
-Goal: Enforce the standardized report format structure before final
-report generation.
-
-**Rule to Execute**: Read and follow the instructions in `references/report-format-enforcer.md`
-
-**Integration**: Apply format constraints for the final report generation.
-
-## Step 10. Generate Final Report
+## Step 9. Generate Final Report
 
 Goal: Generate the final React Project Health Audit report by
 integrating all analysis results.
@@ -290,7 +278,11 @@ generates the final report.
 - Recommendations (6-10 prioritized actions)
 - Appendix: Evidence Index
 
-## Step 11. Export Final Report
+**Note**: After this step completes, the CLI automatically runs
+`references/report-format-enforcer.md` to validate and fix the
+generated report's structure before export.
+
+## Step 10. Export Final Report
 
 Goal: Save the final Google Docs-ready Markdown report to the reports
 directory.
@@ -312,7 +304,7 @@ mkdir -p reports
 
 ## Execution Summary
 
-**Total Rules**: 14 rules
+**Total Rules**: 13 rules
 
 **Rule Execution Order**:
 1. `references/tool-installer.md` {model: cheap}
@@ -327,16 +319,14 @@ mkdir -p reports
 10. `references/state-management-analysis.md` {model: mid}
 11. `references/documentation-analysis.md` {model: cheap}
 12. Read and follow the instructions in `references/harness-analysis.md` {model: mid}
-13. `references/report-format-enforcer.md` {model: frontier}
-14. `references/report-generator.md` {model: frontier}
+13. `references/report-generator.md` {model: frontier}
 
 **Wave-Based Parallel Execution**:
 - Wave 0 (Sequential): Step 0 — Environment Setup (rules 1-4)
 - Wave 1 (Parallel): Steps 1 + 2 — Repository Inventory + Configuration (rules 5-6)
 - Wave 2 (Parallel): Steps 3 + 4 + 5 + 8 — CI/CD + Testing + Code Quality + AI Harness & Adoption (rules 7-9, 12)
 - Wave 3 (Parallel): Steps 6 + 7 — State Management + Documentation (rules 10-11)
-- Wave 4 (Sequential): Step 9 — Report Format Enforcement (rule 13)
-- Wave 5 (Sequential): Steps 10 + 11 — Report Generation + Export (rule 14)
+- Wave 4 (Sequential): Steps 9 + 10 — Report Generation + Export (rule 13)
 
 ## Subagent Dispatch (in-session)
 

@@ -239,6 +239,7 @@ class SkillRegistry {
           'parallel waves.',
       planRelativePath:
           'skills/workflow-builder/SKILL.md',
+      referencesRelativePath: 'skills/workflow-builder/references',
     ),
     WorkflowSkill(
       id: 'ship',

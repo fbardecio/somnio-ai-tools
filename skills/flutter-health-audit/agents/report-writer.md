@@ -57,6 +57,7 @@ Read ALL of the following artifacts (read only what exists; handle missing files
 - `reports/.artifacts/flutter_health/step_05_code_quality.md`
 - `reports/.artifacts/flutter_health/step_06_documentation_analysis.md`
 - `reports/.artifacts/flutter_health/step_07_harness_analysis.md`
+- `reports/.artifacts/flutter_health/step_08_state_management_analysis.md`
 
 Do NOT re-read any raw source files from the project under audit.
 

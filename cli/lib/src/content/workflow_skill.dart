@@ -11,6 +11,7 @@ class WorkflowSkill {
     required this.displayName,
     required this.description,
     required this.planRelativePath,
+    this.referencesRelativePath,
   });
 
   /// Internal identifier.
@@ -27,4 +28,8 @@ class WorkflowSkill {
 
   /// Path to the skill markdown file, relative to repo root.
   final String planRelativePath;
+
+  /// Directory of reference markdown files, relative to repo root.
+  /// Null when the skill is self-contained.
+  final String? referencesRelativePath;
 }

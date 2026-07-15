@@ -25,3 +25,28 @@ const String kReportFormatEnforcerRuleName = 'report-format-enforcer';
 /// `'flutter_tool_installer'`.
 String preflightKey(String techPrefix, String ruleName) =>
     '${techPrefix}_${ruleName.replaceAll('-', '_')}';
+
+/// The rule name the plan parser emits for the best-practices generator
+/// step used by the `*_plan` bundles.
+const String kBestPracticesGeneratorRuleName = 'best-practices-generator';
+
+/// The format-enforcement rule that pairs with the best-practices generator.
+const String kBestPracticesFormatEnforcerRuleName =
+    'best-practices-format-enforcer';
+
+/// Whether [ruleName] is a terminal generator step that must be dispatched
+/// to `StepExecutor.executeReportGenerator` (reads the template and all
+/// artifacts, then writes `RunConfig.reportPath`).
+bool isReportGeneratorRule(String ruleName) =>
+    ruleName == kReportGeneratorRuleName ||
+    ruleName == kBestPracticesGeneratorRuleName;
+
+/// The format-enforcer rule that pairs with [generatorRuleName], or `null`
+/// when the step is not a generator.
+String? formatEnforcerRuleFor(String generatorRuleName) =>
+    switch (generatorRuleName) {
+      kReportGeneratorRuleName => kReportFormatEnforcerRuleName,
+      kBestPracticesGeneratorRuleName =>
+        kBestPracticesFormatEnforcerRuleName,
+      _ => null,
+    };

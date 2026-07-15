@@ -4,7 +4,7 @@ description: |
   Use this agent when analyzing the AI harness (CLAUDE.md, .claude/rules/, settings.json permissions and hooks, .claude/agents/, skills/commands) and the pre-push git hook of a project during a health audit.
 
   <example>
-  Context: The health audit reaches the AI harness analysis step, the last analysis rule before the report is generated.
+  Context: The health audit reaches the AI harness analysis step in Wave 2, alongside CI/CD, testing, and code quality analysis.
   user: "Audit this project."
   assistant: "Now I will analyze the AI harness by reading CLAUDE.md, .claude/rules/, .claude/settings.json, .claude/agents/, and the pre-push hook, scoring each of the 9 rubric dimensions on existence AND quality."
   <commentary>

@@ -13,10 +13,10 @@ void main() {
     // Real SKILL.md tests — one per runnable skill
     // ---------------------------------------------------------------
 
-    test('flutter-health-audit (fh): verbose format, 12 steps', () {
+    test('flutter-health-audit (fh): verbose format, 13 steps', () {
       const plan = '''
 **Rule Execution Order**:
-1. Read and follow the instructions in `references/tool-installer.md`
+1. Read and follow the instructions in `references/tool-installer.md` {model: cheap}
 2. Read and follow the instructions in `references/version-alignment.md` (MANDATORY - stops if FVM global
    fails)
 3. Read and follow the instructions in `references/version-validator.md` (verification of FVM global setup)
@@ -26,16 +26,17 @@ void main() {
 7. Read and follow the instructions in `references/cicd-analysis.md`
 8. Read and follow the instructions in `references/testing-analysis.md`
 9. Read and follow the instructions in `references/code-quality.md`
-10. Read and follow the instructions in `references/documentation-analysis.md`
-11. Read and follow the instructions in `references/harness-analysis.md` {model: mid}
-12. Read and follow the instructions in `references/report-generator.md`
+10. Read and follow the instructions in `references/state-management-analysis.md` {model: mid}
+11. Read and follow the instructions in `references/documentation-analysis.md`
+12. Read and follow the instructions in `references/harness-analysis.md` {model: mid}
+13. Read and follow the instructions in `references/report-generator.md`
 
 **Benefits of Modular Approach**:
 ''';
 
       final steps = parser.parse(plan);
 
-      expect(steps, hasLength(12));
+      expect(steps, hasLength(13));
       expect(steps[0].ruleName, 'tool-installer');
       expect(steps[0].isMandatory, false);
       expect(steps[1].ruleName, 'version-alignment');
@@ -47,33 +48,35 @@ void main() {
       expect(steps[6].ruleName, 'cicd-analysis');
       expect(steps[7].ruleName, 'testing-analysis');
       expect(steps[8].ruleName, 'code-quality');
-      expect(steps[9].ruleName, 'documentation-analysis');
-      expect(steps[10].ruleName, 'harness-analysis');
-      expect(steps[10].model, 'mid');
-      expect(steps[11].ruleName, 'report-generator');
-      expect(steps[11].index, 12);
+      expect(steps[9].ruleName, 'state-management-analysis');
+      expect(steps[9].model, 'mid');
+      expect(steps[10].ruleName, 'documentation-analysis');
+      expect(steps[11].ruleName, 'harness-analysis');
+      expect(steps[11].model, 'mid');
+      expect(steps[12].ruleName, 'report-generator');
+      expect(steps[12].index, 13);
     });
 
-    test('flutter-best-practices (fp): verbose format, 5 steps', () {
+    test('flutter-best-practices (fp): verbose format, 4 steps', () {
       const plan = '''
 **Rule Execution Order**:
-1. Read and follow the instructions in `references/testing-quality.md`
-2. Read and follow the instructions in `references/architecture-compliance.md`
-3. Read and follow the instructions in `references/code-standards.md`
-4. Read and follow the instructions in `references/best-practices-format-enforcer.md`
-5. Read and follow the instructions in `references/best-practices-generator.md`
+1. Read and follow the instructions in `references/testing-quality.md` {model: mid}
+2. Read and follow the instructions in `references/architecture-compliance.md` {model: mid}
+3. Read and follow the instructions in `references/code-standards.md` {model: mid}
+4. Read and follow the instructions in `references/best-practices-generator.md` {model: frontier}
 
 ## Report Metadata (MANDATORY)
 ''';
 
       final steps = parser.parse(plan);
 
-      expect(steps, hasLength(5));
+      expect(steps, hasLength(4));
       expect(steps[0].ruleName, 'testing-quality');
       expect(steps[1].ruleName, 'architecture-compliance');
       expect(steps[2].ruleName, 'code-standards');
-      expect(steps[3].ruleName, 'best-practices-format-enforcer');
-      expect(steps[4].ruleName, 'best-practices-generator');
+      // The format enforcer is deliberately not a numbered step: the runner
+      // auto-applies it after the generator has written the report.
+      expect(steps[3].ruleName, 'best-practices-generator');
     });
 
     test('nestjs-health-audit (nh): short format, 14 steps', () {

@@ -6,7 +6,7 @@ description: |
   <example>
   Context: A user asks for a Flutter health audit; the orchestrator is the first agent invoked.
   user: "Run a health audit on this Flutter project."
-  assistant: "I will orchestrate the Flutter health audit across five waves: Wave 0 (env-setup, mandatory), Wave 1 (repo-analyzer + config-analyzer in parallel), Wave 2 (cicd-analyzer + testing-analyzer + code-quality-analyzer + harness-analyzer in parallel), Wave 3 (docs-analyzer), and Wave 4 (report-writer). I will validate each artifact before advancing."
+  assistant: "I will orchestrate the Flutter health audit across five waves: Wave 0 (env-setup, mandatory), Wave 1 (repo-analyzer + config-analyzer in parallel), Wave 2 (cicd-analyzer + testing-analyzer + code-quality-analyzer + harness-analyzer in parallel), Wave 3 (docs-analyzer + state-management-analyzer in parallel), and Wave 4 (report-writer). I will validate each artifact before advancing."
   <commentary>
   The orchestrator never performs analysis itself. It dispatches subagents and gates progress on artifact existence.
   </commentary>
@@ -108,16 +108,23 @@ Prompt: "Read agents/harness-analyzer.md and follow ALL instructions. It depends
 
 Retry-once policy applies to each missing artifact.
 
-### Wave 3 — Documentation Analysis (Sequential)
+### Wave 3 — Documentation + State Management Analysis (Parallel)
 
-Dispatch one subagent:
+Dispatch two subagents simultaneously:
 
 ```
-Agent: agents/docs-analyzer.md
+Agent 1: agents/docs-analyzer.md
 Prompt: "Read agents/docs-analyzer.md and follow ALL instructions. Reference the repository inventory artifact at reports/.artifacts/flutter_health/step_01_repository_inventory.md. Return complete findings and confirm the artifact path written."
+
+Agent 2: agents/state-management-analyzer.md
+Prompt: "Read agents/state-management-analyzer.md and follow ALL instructions. Reference the repository inventory artifact at reports/.artifacts/flutter_health/step_01_repository_inventory.md. It depends on no other prior artifact. Return complete findings and confirm the artifact path written."
 ```
 
-**Gate**: Verify `reports/.artifacts/flutter_health/step_06_documentation_analysis.md` exists. Retry once if missing.
+**Gate**: After both complete, verify:
+- `reports/.artifacts/flutter_health/step_06_documentation_analysis.md` exists
+- `reports/.artifacts/flutter_health/step_08_state_management_analysis.md` exists
+
+Retry-once policy applies to each missing artifact.
 
 ### Wave 4 — Report Generation (Sequential, requires ALL previous artifacts)
 
