@@ -200,6 +200,7 @@ class AgentInstaller extends Installer {
                 '---\n\n'
                 '$content';
             _writeFile(p.join(baseDir, skill.name, 'SKILL.md'), skillMd);
+            _installAssetDirectories(skill, baseDir);
             for (final entry in refFiles.entries) {
               _writeFile(
                 p.join(baseDir, skill.name, 'references', entry.key),
@@ -285,6 +286,30 @@ class AgentInstaller extends Installer {
         ..write(entry.value);
     }
     return buffer.toString();
+  }
+
+  /// Copies each of [skill]'s `assetDirectories` verbatim into the installed
+  /// skill directory (e.g. `scripts/`, `config/`), preserving their relative
+  /// layout under `<baseDir>/<skill.name>/<dirBaseName>/...`.
+  ///
+  /// Silently skips directories that don't exist in the source repo — a
+  /// skill can list a directory it hasn't populated yet without breaking
+  /// install.
+  void _installAssetDirectories(WorkflowSkill skill, String baseDir) {
+    for (final relativeDir in skill.assetDirectories) {
+      final sourceDir = Directory(p.join(loader.repoRoot, relativeDir));
+      if (!sourceDir.existsSync()) continue;
+
+      final dirName = p.basename(relativeDir);
+      for (final entity in sourceDir.listSync(recursive: true)) {
+        if (entity is! File) continue;
+        final relativePath = p.relative(entity.path, from: sourceDir.path);
+        _writeFile(
+          p.join(baseDir, skill.name, dirName, relativePath),
+          entity.readAsStringSync(),
+        );
+      }
+    }
   }
 
   @override

@@ -1,0 +1,35 @@
+{
+  "skill_name": "dora-metrics",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run the DORA metrics for Example Project.",
+      "expected_output": "Shows the confirmation table (2 rows: example-frontend and example-backend, main branch, 14-day window), verifies authentication, attempts to run the script and reports the result (or the auth error clearly, without inventing numbers).",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Give me the lead time for Example Project over the last 2 weeks.",
+      "expected_output": "Interprets 'last 2 weeks' as the default 14-day window (does not ask for another window), follows the same flow (table, auth, run, report) focused on Lead Time.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Run the DORA metrics for the Delta project.",
+      "expected_output": "Delta is not in config/projects.json. The skill does NOT invent repos or run anyway — it asks for the missing details (repos, type, prod branch) to add it straight to the config, instead of sending the user to edit a separate file. It does not run anything until it has the mapping.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Add the Omega project to the DORA metrics, it has a single repo: acme/omega-api, prod branch develop.",
+      "expected_output": "Asks for the repo type (web/mobile/backend) if it wasn't given, builds the JSON entry for config/projects.json (repo, type, prod_branch=develop, without deploy_source or tag_pattern if no overrides apply), shows it for confirmation before saving, and only then continues with the normal flow (confirmation table, etc.).",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "example-frontend doesn't publish Releases, only plain tags vX.Y.Z. Run the metrics anyway.",
+      "expected_output": "Uses deploy_source=tag (via the --deploy-source override or by updating the config), does not invent non-existent releases nor fail silently.",
+      "files": []
+    }
+  ]
+}
