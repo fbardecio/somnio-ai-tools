@@ -315,15 +315,16 @@ Score: [Score]/100 ([Label])
 Maturity: [sin harness | harness básico | harness sólido | paved path]
 
 Coverage:
-- CLAUDE.md: [Status] - [Score]/14
-- Rules: [Status] - [Score]/10
-- Permissions: [Status] - [Score]/14
-- Hooks: [Status] - [Score]/16
-- Pre-push git hook: [Status] - [Score]/12
-- Agents: [Status] - [Score]/12
-- Commands / Skills: [Status] - [Score]/10
-- Advanced orchestration: [Status] - [Score]/6
-- Lifecycle & versioning: [Status] - [Score]/6
+- CLAUDE.md: [Status] - [Score]/13
+- Rules: [Status] - [Score]/9
+- Permissions: [Status] - [Score]/13
+- Hooks: [Status] - [Score]/14
+- Pre-push git hook: [Status] - [Score]/11
+- Agents: [Status] - [Score]/11
+- Commands / Skills: [Status] - [Score]/9
+- Advanced orchestration: [Status] - [Score]/5
+- Lifecycle: [Status] - [Score]/3
+- Harness versioning: [Status] - [Score]/12
 - Total: [Score]/100
 
 Key Findings:

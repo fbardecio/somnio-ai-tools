@@ -120,7 +120,7 @@ Score: [Score]/100 ([Label])
 Maturity: [sin harness | harness básico | harness sólido | paved path]
 Coverage: one row per rubric dimension (CLAUDE.md, Rules, Permissions,
 Hooks, Pre-push git hook, Agents, Commands / Skills, Advanced
-orchestration, Lifecycle & versioning) plus a bold Total row
+orchestration, Lifecycle, Harness versioning) plus a bold Total row
 Key Findings:
 - [Finding 1]
 - [Continue as needed]

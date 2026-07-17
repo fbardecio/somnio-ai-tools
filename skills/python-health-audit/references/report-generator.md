@@ -207,7 +207,7 @@ Coverage:
 [Dimension] | [Status] | [Points]
 (one row per rubric dimension: CLAUDE.md, Rules, Permissions, Hooks,
 Pre-push git hook, Agents, Commands / Skills, Advanced orchestration,
-Lifecycle & versioning, plus a Total row)
+Lifecycle, Harness versioning, plus a Total row)
 
 Key Findings:
 - [Finding 1]

@@ -5,6 +5,16 @@ All notable changes to the Somnio CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.1] - 2026-07-17
+
+### Changed
+
+- **AI Harness & Adoption rubric — versioning is now its own dimension, not an existence gate**: In all four health-audit skills (`flutter`, `react`, `nestjs`, `python`), a harness that was present on disk but excluded by `.gitignore` scored ~14/100 — indistinguishable from a repo with no harness at all — because `git ls-files` returned empty and zeroed the *existence* half of seven dimensions before any quality could be scored. The rubric now judges existence **on disk**: dimensions 1-9 are scored on what the files actually contain, whether or not they are committed. Whether the harness is versioned is scored once, in the new **dimension 10 — Harness versioning (12 pts)**, graduated 12 (fully tracked) / 8 (tracked but a `.gitignore` pattern will silently swallow every new harness file — the grandfathered trap) / 5 (partial) / 0 (nothing tracked). When dimension 10 scores 0, Section 6 caps the section at 60 ("harness básico"), so an uncommitted harness can never read as "sólido" but is no longer collapsed to the same score as no harness — and the one-line fix (`git add` / remove the `.gitignore` line) surfaces as the highest-leverage action. The remaining dimensions were rebalanced to keep the total at 100. Evidence gathering adds one `git check-ignore -v --no-index` call (the `--no-index` flag is load-bearing — without it git stays silent on already-tracked paths, hiding the grandfathered case), staying within the ≤8-call budget. Applied identically across the shared rubric, the `harness-analyzer` subagents, the `SKILL.md` step descriptions, and the report generators/enforcers/templates.
+
+### Fixed
+
+- **`nestjs-health-audit` rubric drift**: `references/harness-analysis.md` had diverged from the other three stacks outside its designated stack-specific section (the in-session dispatch instruction), violating the file's own byte-identical invariant. Realigned with flutter/react/python.
+
 ## [2.8.0] - 2026-07-17
 
 ### Added

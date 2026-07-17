@@ -1,6 +1,6 @@
 # AI Harness & Adoption Analysis
 
-> Score the project's AI harness — CLAUDE.md, `.claude/rules/`, `settings.json` permissions and hooks, `.claude/agents/`, commands/skills, the pre-push git hook, and the documented lifecycle — on a 100-point rubric that judges **quality, not just presence**.
+> Score the project's AI harness — CLAUDE.md, `.claude/rules/`, `settings.json` permissions and hooks, `.claude/agents/`, commands/skills, the pre-push git hook, the documented lifecycle, and whether any of it is actually committed — on a 100-point rubric that judges **quality, not just presence**.
 
 ---
 
@@ -11,22 +11,35 @@ stating exactly how many points each action recovers.
 THE CORE PRINCIPLE — NON-NEGOTIABLE:
 Every dimension splits into EXISTENCE points and QUALITY points. A
 harness that EXISTS but is HOLLOW MUST score badly. Existence is the
-cheap half and is worth 38 of the 100 points; the quality half is worth
-62 and is what discriminates a paved path from a repo that pasted a
+cheap half and is worth 28 of the 100 points; the quality half is worth
+72 and is what discriminates a paved path from a repo that pasted a
 CLAUDE.md once and never touched it again. A repo with one of
-everything and quality in nothing scores 38 — it cannot reach the
+everything and quality in nothing scores 28 — it cannot reach the
 61-point "harness sólido" band on existence alone, and it is nowhere
 near the team's 85-point target. That ceiling is the rubric's whole
 point.
 
+THE SECOND PRINCIPLE — EXISTENCE IS AN ON-DISK TEST:
+"Exists" means the file is on disk and non-empty. It does NOT mean the
+file is committed. Whether the harness is versioned is scored exactly
+once, in dimension 10, which is worth 12 points and carries a section
+cap (Section 6). Never zero a dimension because a file is untracked or
+gitignored — open it and score what it contains. A harness that exists
+but is not shared is a real and serious finding with a one-line fix; it
+is not the same finding as no harness at all, and this rubric must
+never report the two as the same number.
+
 Concretely, and this is the calibration target for the whole file:
-- A 600-line untouched `/init` CLAUDE.md scores 8/14, not 14/14.
-- A PostToolUse hook whose command is `echo "checked"` scores 6/16,
-  not 16/16.
+- A 600-line untouched `/init` CLAUDE.md scores 7/13, not 13/13.
+- A PostToolUse hook whose command is `echo "checked"` scores 5/14,
+  not 14/14.
 - An agent declared without a `model:` key forfeits its 4 quality
   points rather than scoring full marks for existing.
 - A `settings.json` with a blanket `Bash(*)` allow and no `deny` scores
-  5/14, not 14/14.
+  4/13, not 13/13.
+- A complete, well-built harness that `.gitignore` excludes scores 0/12
+  on dimension 10 and is capped at 60 overall — not the ~14 it would
+  score if tracking gated every dimension's existence.
 
 If a check cannot be decided from file contents, it does NOT pass.
 Never award quality points on the assumption that a file "probably"
@@ -35,7 +48,9 @@ does the right thing — open it, or score 0 and say why.
 EFFICIENCY REQUIREMENTS:
 - Target: ≤ 8 total tool calls for this entire analysis
 - Batch-read `.claude/**` in parallel reads of 3-5 files per tool call
-- Use ONE `git ls-files .claude .githooks` instead of per-file stats
+- Use ONE `git ls-files .claude .githooks` instead of per-file stats,
+  and ONE `git check-ignore -v --no-index` for every path at once — both fold into
+  the CALL 1 / CALL 2 pair in Section 3
 - Do NOT read harness files one at a time
 - Pipe long output through `| head -50` (rule bodies, hook scripts,
   `git ls-files` on a large tree)
@@ -47,9 +62,14 @@ EFFICIENCY REQUIREMENTS:
 SECTION 1 — SCOPE: WHAT COUNTS AS "THE HARNESS"
 ────────────────────────────────────────────────────────────────────
 
-The harness is the project-level, VERSIONED configuration that travels
-in the repo and applies to every teammate. That boundary decides what
-you score.
+The harness is the project-level configuration that LIVES IN THE REPO
+and is meant to apply to every teammate. That boundary — repo versus
+home directory — decides what you score.
+
+Note the boundary is location, not git status. Whether the in-repo
+harness is actually committed is a QUALITY question, priced at 12
+points in dimension 10, not a scope question. Everything below is in
+scope whether or not `git ls-files` knows about it.
 
 IN SCOPE (all paths relative to the repo root):
 - `CLAUDE.md` at the repo root, or `.claude/CLAUDE.md`
@@ -67,14 +87,25 @@ IN SCOPE (all paths relative to the repo root):
 OUT OF SCOPE — never award points for these:
 - `~/.claude/**` (personal, does not travel with the repo). A great
   personal harness is invisible to the team; that is the whole point.
-- `.claude/settings.local.json` (gitignored personal overrides). Its
+  This is about LOCATION, not tracking: a file outside the repo can
+  never be committed, so it is not a dimension 10 finding — it simply
+  does not exist as far as this audit is concerned.
+- `.claude/settings.local.json` (personal, per-machine overrides). Its
   existence never satisfies dimension 3's existence points.
-- `CLAUDE.local.md` (gitignored personal notes)
-- Untracked files. A `.claude/settings.json` that exists on disk but
-  is NOT tracked by git is not team harness — see dimension 9.
+- `CLAUDE.local.md` (personal notes)
 - CI workflows under `.github/` — those are scored by the CI/CD
   section of this audit, not here. The pre-push hook IS in scope; the
   CI pipeline that runs the same gate is not.
+
+IN SCOPE, AND THIS IS THE POINT PEOPLE GET WRONG — untracked files.
+A `.claude/settings.json` that exists on disk but is not committed IS
+scored: dimensions 1-9 read it and judge it on its contents, exactly as
+if it were tracked. Not being committed costs dimension 10's 12 points
+and triggers the Section 6 cap — once, visibly, with a one-line fix
+attached. It does not silently zero the file's own dimension. An
+untracked harness is a real harness with a distribution problem; a
+missing harness is a different finding, and the report must be able to
+tell a reader which one they have.
 
 ────────────────────────────────────────────────────────────────────
 SECTION 2 — STACK-SPECIFIC VALUES
@@ -118,25 +149,45 @@ Follow this order. It is built to answer every rubric check in ≤8
 calls, and to make the git-tracking checks (which several dimensions
 depend on) cost one call total.
 
-CALL 1 — inventory + tracking in one shot:
+CALL 1 — tracking in one shot:
 ```
 git ls-files .claude .githooks CLAUDE.md AGENTS.md CLAUDE.local.md | head -50
 ```
-This single call answers: does `.claude/` exist, what is in it, and —
-critically — what is COMMITTED. `git ls-files` lists tracked files
-only, so anything absent from this output is either missing or
-untracked. Both fail the same checks. Note the distinction in Evidence.
+`git ls-files` lists tracked files only. This call answers exactly one
+question — what is COMMITTED — and it feeds exactly one dimension: 10.
+It does NOT decide whether a harness piece exists; CALL 2 does that.
+Keep the two ideas apart, because conflating them is the failure this
+rubric was rewritten to prevent (Section 4.11).
 
-CALL 2 — on-disk reality + hook mechanisms + sizes, one command:
+CALL 2 — on-disk reality + ignore status + hook mechanisms + sizes:
 ```
 ls -la .claude .claude/rules .claude/agents .claude/commands .claude/skills 2>/dev/null | head -50; \
 wc -l CLAUDE.md .claude/rules/*.md 2>/dev/null | head -20; \
+git check-ignore -v --no-index .claude .claude/settings.json .claude/agents .claude/rules CLAUDE.md 2>/dev/null; \
+grep -n 'claude\|CLAUDE' .gitignore 2>/dev/null; \
 git config --get core.hooksPath; \
 ls -la .git/hooks/pre-push .githooks/pre-push .husky/pre-push lefthook.yml .pre-commit-config.yaml 2>/dev/null
 ```
-This answers dimension 1's line count, dimension 2's rule sizes, and
-the whole of Section 5's detection table. Files listed by `ls` but not
-by CALL 1 are untracked.
+This answers what EXISTS (every dimension's existence check), dimension
+1's line count, dimension 2's rule sizes, dimension 10's ignore status,
+and the whole of Section 5's detection table.
+
+`git check-ignore -v --no-index` is the call that makes dimension 10
+measurable. It prints `<gitignore-file>:<line>:<pattern>	<path>` for
+each ignored path and nothing for the rest, so it names the exact line
+to delete in the remediation. Three properties matter:
+- It reports an ignore RULE MATCH, which is independent of tracking.
+- `--no-index` IS LOAD-BEARING, not optional. Without it, `git
+  check-ignore` deliberately stays silent for any path that is already
+  tracked — which would hide the grandfathered case in 4.11 completely,
+  the one case `git ls-files` also cannot see. `--no-index` makes the
+  match report on the `.gitignore` pattern alone, tracked or not.
+- It exits 1 when nothing matches. That is the healthy result, not an
+  error, and it does not false-positive on a clean repo. `2>/dev/null`
+  and the `;` chaining keep it from aborting the compound command.
+Cross-read CALL 1 against CALL 2: files listed by `ls` but absent from
+`git ls-files` are untracked. That distinction scores dimension 10 —
+and, per Section 4, nothing else.
 
 CALL 3-5 — batch-read the harness (3-5 files per call, parallel):
 - `CLAUDE.md` + `.claude/settings.json` + every `.claude/rules/*.md`
@@ -166,35 +217,61 @@ skip it. Under-spending the budget is always correct; over-spending it
 is not.
 
 ────────────────────────────────────────────────────────────────────
-SECTION 4 — THE RUBRIC: 100 POINTS ACROSS 9 DIMENSIONS
+SECTION 4 — THE RUBRIC: 100 POINTS ACROSS 10 DIMENSIONS
 ────────────────────────────────────────────────────────────────────
 
 4.1 OVERVIEW
 
 | # | Dimension | Pts | Existence | Quality (the discriminating half) |
 |---|---|---:|---|---|
-| 1 | CLAUDE.md | 14 | exists (6) | <200 lines, real build/test commands, non-deducible conventions (+8). >400 lines, or generic untouched `/init` boilerplate → quality capped at 2 |
-| 2 | Rules | 10 | ≥1 in `.claude/rules/` (4) | ≥1 with `paths:` frontmatter scoped to the stack (+4); dense, not duplicating CLAUDE.md (+2) |
-| 3 | Permissions | 14 | project `settings.json` committed (5) | `deny` of secrets — `.env*`, keystores, PII (+6); `allow` scoped, not blanket `Bash(*)` (+3) |
-| 4 | Hooks | 16 | ≥1 hook configured (6) | PostToolUse/Stop runs a **real gate** (lint/test/analyze), not `echo`/no-op (+7); script versioned in-repo + `timeout` set (+3) |
-| 5 | Pre-push git hook | 12 | pre-push exists, any mechanism (5) | **versioned** in the repo, not only `.git/hooks/` (+4); runs a real gate + enable step documented (+3) |
-| 6 | Agents | 12 | ≥1 custom agent (4) | **every agent declares `model:`** (+4); scoped `tools:` (+2); trigger-shaped `description:` (+2) |
-| 7 | Commands / Skills | 10 | ≥1 invocable team procedure (5) | skill with progressive disclosure, or command with `argument-hint` (+5) |
-| 8 | Advanced orchestration | 6 | — | graduated: subagent delegation, `isolation: worktree`, loops / scheduled automation |
-| 9 | Lifecycle & versioning | 6 | `.claude/` committed, not gitignored (3) | documented plan→impl→autotest→review→PR procedure (+3) |
+| 1 | CLAUDE.md | 13 | exists on disk, non-empty (5) | <200 lines, real build/test commands, non-deducible conventions (+8). >400 lines, or generic untouched `/init` boilerplate → quality capped at 2 |
+| 2 | Rules | 9 | ≥1 in `.claude/rules/` (3) | ≥1 with `paths:` frontmatter scoped to the stack (+4); dense, not duplicating CLAUDE.md (+2) |
+| 3 | Permissions | 13 | project `settings.json` on disk (4) | `deny` of secrets — `.env*`, keystores, PII (+6); `allow` scoped, not blanket `Bash(*)` (+3) |
+| 4 | Hooks | 14 | ≥1 hook configured (5) | PostToolUse/Stop runs a **real gate** (lint/test/analyze), not `echo`/no-op (+6); script in-repo + `timeout` set (+3) |
+| 5 | Pre-push git hook | 11 | pre-push exists, any mechanism (4) | **versioned** in the repo, not only `.git/hooks/` (+4); runs a real gate + enable step documented (+3) |
+| 6 | Agents | 11 | ≥1 custom agent (3) | **every agent declares `model:`** (+4); scoped `tools:` (+2); trigger-shaped `description:` (+2) |
+| 7 | Commands / Skills | 9 | ≥1 invocable team procedure (4) | skill with progressive disclosure, or command with `argument-hint` (+5) |
+| 8 | Advanced orchestration | 5 | — | graduated: subagent delegation, `isolation: worktree`, loops / scheduled automation |
+| 9 | Lifecycle | 3 | — | documented plan→impl→autotest→review→PR procedure |
+| 10 | **Harness versioning** | 12 | — | graduated: is the harness on disk actually COMMITTED, and does `.gitignore` exclude it (Section 4.11) |
 | | **Total** | **100** | | |
 
-Existence subtotal: 38 (6+4+5+6+5+4+5+0+3). Quality subtotal: 62
-(8+6+9+10+7+8+5+6+3). A repo that has one of everything and quality in
-none of it lands at exactly 38 — "harness básico — contexto sí,
+Existence subtotal: 28 (5+3+4+5+4+3+4+0+0+0). Quality subtotal: 72
+(8+6+9+9+7+8+5+5+3+12). A repo that has one of everything and quality
+in none of it lands at exactly 28. Add a committed harness (dimension
+10's full 12) and it reaches 40 — "harness básico — contexto sí,
 enforcement no". That is the intended reading, not a bug in the rubric:
 the band's own name describes precisely that repo.
 
-4.2 DIMENSION 1 — CLAUDE.md (14)
+⚠️ EXISTENCE IS AN ON-DISK TEST. THE WHOLE RUBRIC TURNS ON THIS.
+Dimensions 1-8 ask ONLY: is the file on disk, and is it any good?
+Whether it is committed is scored ONCE, in dimension 10, and nowhere
+else. Never zero a dimension because a file is untracked or gitignored
+— read the file and score what it contains.
 
-EXISTENCE (6): a `CLAUDE.md` at the repo root, or `.claude/CLAUDE.md`,
-or `AGENTS.md`, exists AND is tracked by git AND is non-empty.
-- Untracked → 0. Personal `~/.claude/CLAUDE.md` → 0.
+The reason is diagnostic, not generous. When tracking gated every
+existence check, a repo with a real CLAUDE.md, real hooks and real
+agents that happened to gitignore `.claude/` scored the same ~14 as a
+repo with no harness at all, and the action list told the team to
+"create a CLAUDE.md" they had already written. One `.gitignore` line
+cost up to 85 points, silently, through seven dimensions. It is now one
+row worth 12 points, plus the Section 6 cap — visible, bounded, and
+attached to the one-line fix that recovers it.
+
+This does NOT soften the thesis that an uncommitted harness is not team
+harness. Section 6 caps the section at 60 while nothing is tracked, so
+such a repo can never be called "harness sólido". The rubric now says
+"you built it, you just have not shared it" — which is true, and
+actionable — instead of "you have nothing", which was false.
+
+4.2 DIMENSION 1 — CLAUDE.md (13)
+
+EXISTENCE (5): a `CLAUDE.md` at the repo root, or `.claude/CLAUDE.md`,
+or `AGENTS.md`, exists on disk AND is non-empty.
+- Untracked or gitignored → still 5, and score its quality normally.
+  Tracking is dimension 10's job. Note the fact in Evidence.
+- Personal `~/.claude/CLAUDE.md` → 0. It is outside the repo entirely
+  (Section 1) — that is a different failure from "not committed".
 - Empty or whitespace-only → 0.
 
 QUALITY (+8), three independent tests:
@@ -220,7 +297,7 @@ tree for five minutes?* If yes, it is deducible and worth nothing.
 
 QUALITY CAP — apply BEFORE summing 1a/1b/1c. If either condition
 below holds, quality is capped at 2 (so the dimension scores at most
-8/14) regardless of the tests above:
+7/13) regardless of the tests above:
 
 CAP CONDITION A — bloat: `wc -l CLAUDE.md` > 400.
   Rationale: every line is paid in tokens in every session. A 600-line
@@ -246,10 +323,11 @@ Note the cap is not redundant with the tests: a 500-line file that
 does document real commands would otherwise score 5/8 on 1b+1c; the
 cap drops it to 2. Bloat is a defect on its own.
 
-4.3 DIMENSION 2 — RULES (10)
+4.3 DIMENSION 2 — RULES (9)
 
-EXISTENCE (4): ≥1 `.md` file in `.claude/rules/`, tracked by git,
-non-empty. `~/.claude/rules/` never counts (Section 1).
+EXISTENCE (3): ≥1 non-empty `.md` file in `.claude/rules/` on disk.
+Tracking is dimension 10's job — do not test it here.
+`~/.claude/rules/` never counts (Section 1).
 
 QUALITY (+4) — SCOPED `paths:`:
 Award 4 if ≥1 rule has YAML frontmatter with a `paths:` key whose
@@ -275,14 +353,17 @@ Award 2 only if BOTH hold:
   one copy is edited.
 Award 0 if either fails. Do not award 1.
 
-4.4 DIMENSION 3 — PERMISSIONS (14)
+4.4 DIMENSION 3 — PERMISSIONS (13)
 
-EXISTENCE (5): `.claude/settings.json` exists AND appears in
-`git ls-files` (CALL 1).
-- `.claude/settings.local.json` alone → 0. It is gitignored and
-  personal; it protects one laptop, not the team.
-- On disk but untracked → 0, and say so explicitly in Evidence: the
-  fix is one `git add`, which makes it the cheapest action in the list.
+EXISTENCE (4): `.claude/settings.json` exists on disk and parses.
+- On disk but untracked or gitignored → still 4, and score its `deny`
+  and `allow` normally. Tracking is dimension 10's job; record the fact
+  in Evidence and let dimension 10 charge for it once.
+- `.claude/settings.local.json` alone → 0. This is NOT a tracking
+  judgement and dimension 10 does not rescue it: `settings.local.json`
+  is by design personal, per-machine config (Section 1). The project
+  file is `settings.json`, and it does not exist. The two files mean
+  different things — one laptop's preferences versus the team's policy.
 
 QUALITY (+6) — `deny` OF SECRETS (graduated):
 First, inventory what this repo actually has to protect. Look for
@@ -324,22 +405,23 @@ not 0: nothing dangerous was granted, but no paved path was built
 either, so every command still stops for approval and the lifecycle
 cannot run unattended.
 
-4.5 DIMENSION 4 — HOOKS (16)
+4.5 DIMENSION 4 — HOOKS (14)
 
-EXISTENCE (6): `.claude/settings.json` has a `hooks` key with ≥1 event
-containing ≥1 matcher with a non-empty `command`.
+EXISTENCE (5): `.claude/settings.json` has a `hooks` key with ≥1 event
+containing ≥1 matcher with a non-empty `command`. On-disk test — an
+untracked `settings.json` still earns this; see dimension 10.
 
-QUALITY (+7) — A REAL GATE, NOT AN `echo`. This is the single most
+QUALITY (+6) — A REAL GATE, NOT AN `echo`. This is the single most
 discriminating test in the rubric. It has two parts:
 
-  4a — THE GATE IS INVOKED (+5). A `PostToolUse` hook (matcher
+  4a — THE GATE IS INVOKED (+4). A `PostToolUse` hook (matcher
   covering `Edit`/`Write`/`MultiEdit`) or a `Stop` hook whose command,
   followed to its end, actually runs lint / test / analyze / format /
   typecheck.
   MANDATORY: if the command points at a script (`./scripts/check.sh`,
   `make check`, an npm script), READ THE SCRIPT — or the `Makefile`
   target, or the `package.json` script. `settings.json` cannot answer
-  this question. Award 5 only when you have seen the gate invocation
+  this question. Award 4 only when you have seen the gate invocation
   with your own eyes.
   Award 0 if:
   - the command is `echo ...`, `true`, `:`, a `printf`, a notification
@@ -365,37 +447,44 @@ discriminating test in the rubric. It has two parts:
   without checking `$?`.
   THIS IS THE HOLLOW-HARNESS TEST. A hook that runs the full test suite
   and then exits 0 regardless is theatre: it burns time on every edit
-  and enforces nothing. It scores 5, not 7, and the missing 2 points
+  and enforces nothing. It scores 4, not 6, and the missing 2 points
   must appear in the action list with the exact line to change.
 
-QUALITY (+3) — VERSIONED + BOUNDED:
-- +2 — the hook's script is versioned in-repo: it appears in CALL 1's
-  `git ls-files`, and the command uses a repo-relative path. Award 0
-  for an absolute path outside the repo (`/Users/<name>/bin/check.sh`,
-  `~/scripts/...`) — that hook works on exactly one machine and is not
-  team harness. A fully inline command (no script file) scores 2 if
-  short, self-contained, AND already credited under 4a (a real gate,
-  not `echo`/`true`/a no-op) — it is versioned in `settings.json`
-  itself. A no-op/echo command earns 0 here regardless of being inline
-  and short: an inline command that gates nothing is not "harness",
-  it is noise that happens to be checked into git. (This is why the
-  `echo "checked"` calibration example above scores 6/16 — existence 6,
-  gate 0, versioned 0 — not 8/16.)
+QUALITY (+3) — IN-REPO + BOUNDED:
+- +2 — the hook's script lives INSIDE the repo and the command uses a
+  repo-relative path. Award 0 for an absolute path outside the repo
+  (`/Users/<name>/bin/check.sh`, `~/scripts/...`) — that hook works on
+  exactly one machine and is not team harness. This is a path test, not
+  a tracking test: a script at `scripts/check.sh` that is untracked
+  still earns these 2 points, and dimension 10 charges for the tracking
+  once. A fully inline command (no script file) scores 2 if short,
+  self-contained, AND already credited under 4a (a real gate, not
+  `echo`/`true`/a no-op) — it is carried by `settings.json` itself. A
+  no-op/echo command earns 0 here regardless of being inline and short:
+  an inline command that gates nothing is not "harness", it is noise.
+  (This is why the `echo "checked"` calibration example above scores
+  5/14 — existence 5, gate 0, in-repo 0 — not 7/14.)
 - +1 — `timeout` is set on the hook entry. Award 0 if absent. Note the
   unit is SECONDS, not milliseconds; a `timeout` of `60` is 60s and is
   a reasonable value, not a bug. Do not flag a plausible timeout as
   wrong.
 
-4.6 DIMENSION 5 — PRE-PUSH GIT HOOK (12)
+4.6 DIMENSION 5 — PRE-PUSH GIT HOOK (11)
 
-EXISTENCE (5): a pre-push hook exists by ANY mechanism in Section 5's
+EXISTENCE (4): a pre-push hook exists by ANY mechanism in Section 5's
 detection table. Mechanism-agnostic — a working lefthook setup is worth
 exactly as much as a `.githooks/` setup.
 
 QUALITY (+4) — VERSIONED: award 4 for every mechanism in Section 5
 except the bare `.git/hooks/pre-push` row. `.git/` is not committed and
 not cloneable: that hook protects its author and nobody else, which is
-why it forfeits these 4 points while still earning the existence 5.
+why it forfeits these 4 points while still earning the existence 4.
+This is the ONE versioning test that does NOT move to dimension 10, and
+the exception is structural, not an inconsistency: `.git/hooks/` is not
+merely uncommitted, it is UNCOMMITTABLE. No `git add` can fix it — the
+remedy is to move the file to a different path. Dimension 10 scores the
+`.claude/` harness, whose fix is a commit; this scores a location whose
+fix is a move. Two different findings, two different actions.
 
 QUALITY (+3):
 - +2 — the hook body runs a real gate. Apply the SAME test as 4a: read
@@ -409,10 +498,10 @@ QUALITY (+3):
   is a hook that only the person who configured their local git ever
   runs — the file is in the repo and the enforcement is not.
 
-4.7 DIMENSION 6 — AGENTS (12)
+4.7 DIMENSION 6 — AGENTS (11)
 
-EXISTENCE (4): ≥1 `.md` in `.claude/agents/`, tracked by git, with YAML
-frontmatter carrying at least a `name`.
+EXISTENCE (3): ≥1 `.md` in `.claude/agents/` on disk, with YAML
+frontmatter carrying at least a `name`. Tracking is dimension 10's job.
 
 QUALITY (+4) — EVERY AGENT DECLARES `model:` — ALL OR NOTHING:
 This is the rubric's originating example and it is deliberately
@@ -451,11 +540,12 @@ describe a trigger produces an agent that never fires.
 | Some do | 1 |
 | None do, or descriptions are one-word/absent | 0 |
 
-4.8 DIMENSION 7 — COMMANDS / SKILLS (10)
+4.8 DIMENSION 7 — COMMANDS / SKILLS (9)
 
-EXISTENCE (5): ≥1 invocable team procedure tracked by git — a
+EXISTENCE (4): ≥1 invocable team procedure on disk — a
 `.claude/commands/*.md`, or a `.claude/skills/<name>/SKILL.md`.
 Non-empty; the file body must be an actual procedure, not a stub.
+Tracking is dimension 10's job.
 
 QUALITY (+5), two tests:
 - +3 — PROGRESSIVE DISCLOSURE or `argument-hint`. Award 3 if EITHER:
@@ -474,43 +564,39 @@ QUALITY (+5), two tests:
   any repo ("review the code carefully, follow best practices") — that
   is not a team procedure, it is a wish.
 
-4.9 DIMENSION 8 — ADVANCED ORCHESTRATION (6)
+4.9 DIMENSION 8 — ADVANCED ORCHESTRATION (5)
 
 No existence points — this dimension is entirely graduated. It covers
 the topics beyond the codelab's own rubric: agents, subagents,
-worktrees and loops. Award each independently and sum:
+worktrees and loops. Award each independently and sum. The three are
+not worth the same: they are ordered by leverage, and loops are worth
+1 because they are the narrowest win of the three and the last thing a
+team should reach for.
 
 | Capability | Pts | Evidence that counts |
 |---|---:|---|
 | Subagent delegation | +2 | A command, skill, or agent that dispatches work to other agents: `Task` in an `allowed-tools`/`tools:` list, an orchestrator agent, an explicit dispatch table, or a documented wave/parallel plan |
 | Worktree isolation | +2 | `isolation: worktree` declared on an agent or command, or a documented git-worktree workflow for running agents in parallel without stepping on the working tree |
-| Loops / scheduled automation | +2 | A scheduled or recurring agent (cron/routine), a self-iterating loop command, or a chained automation driven by `SessionStart`/`Stop` hooks that goes beyond a single gate |
+| Loops / scheduled automation | +1 | A scheduled or recurring agent (cron/routine), a self-iterating loop command, or a chained automation driven by `SessionStart`/`Stop` hooks that goes beyond a single gate |
 
 Scoring notes:
 - Score DECLARED capability, not aspiration. Prose in CLAUDE.md saying
   "we should use worktrees" earns 0. A key in frontmatter earns 2.
-- A repo at 0/6 here is normal and is NOT a Risk. Say so plainly:
+- A repo at 0/5 here is normal and is NOT a Risk. Say so plainly:
   this dimension is headroom above a solid harness, and it is the last
-  place to spend effort. Never let 0/6 here drive a Risk entry — the
+  place to spend effort. Never let 0/5 here drive a Risk entry — the
   action list will naturally sort it last, which is correct.
 - Do not double-count with dimension 7: a skill earns its dimension-7
   points for being an invocable procedure, and earns here only if it
   additionally delegates, isolates, or loops.
 
-4.10 DIMENSION 9 — LIFECYCLE & VERSIONING (6)
+4.10 DIMENSION 9 — LIFECYCLE (3)
 
-EXISTENCE (3): `.claude/` is committed, not gitignored.
-- Pass: CALL 1's `git ls-files .claude` returns ≥1 file that is not
-  `settings.local.json`.
-- Fail (0): `.claude/` returns nothing from `git ls-files`; or
-  `.gitignore` ignores `.claude/` or `.claude/settings.json`; or the
-  only tracked file is `settings.local.json`.
-- This is the dimension that decides whether any of the rest is TEAM
-  harness. If it scores 0, say so at the top of Key Findings: an
-  uncommitted harness scores its other dimensions on a configuration
-  that exists on exactly one machine.
+No existence points. This dimension is now only the documented
+procedure; the versioning half moved out to dimension 10, where it is
+measured properly and priced at 12.
 
-QUALITY (+3) — DOCUMENTED LIFECYCLE: the plan → implementation →
+QUALITY (3) — DOCUMENTED LIFECYCLE: the plan → implementation →
 autotest → review → PR procedure is written down (CLAUDE.md, README,
 CONTRIBUTING, docs/) or packaged as a command/skill that executes it.
 | Condition | Pts |
@@ -518,6 +604,57 @@ CONTRIBUTING, docs/) or packaged as a command/skill that executes it.
 | All five stages documented or packaged | 3 |
 | ≥3 of the five stages | 2 |
 | Fewer than 3, or only a passing mention ("we use PRs") | 0 |
+
+4.11 DIMENSION 10 — HARNESS VERSIONING (12)
+
+This is the dimension that decides whether everything above is TEAM
+harness or one laptop's private setup. It is the ONLY place tracking is
+scored. Dimensions 1-8 have already scored the harness on its merits;
+this one asks the separate question: does anyone else have it?
+
+Evidence: CALL 1 (`git ls-files`) crossed with CALL 2 (`ls -la` and
+`git check-ignore -v --no-index`). Scope: `.claude/**` plus the dimension-1 file
+(`CLAUDE.md` / `AGENTS.md`). Exclude from the scope, always:
+`.claude/settings.local.json` and `CLAUDE.local.md` — they are personal
+by design (Section 1) and are SUPPOSED to be untracked. Their absence
+from `git ls-files` is correct and must never cost a point here.
+
+| Condition | Pts |
+|---|---:|
+| Every in-scope harness file on disk is tracked, AND `git check-ignore` reports nothing for `.claude` or the CLAUDE.md file | 12 |
+| Every in-scope harness file is tracked, BUT `.gitignore` carries a pattern matching `.claude` — tracked files survive by grandfathering while every NEW harness file is silently ignored | 8 |
+| Partial: some in-scope harness files tracked, others untracked or ignored | 5 |
+| Harness exists on disk but NOTHING in scope is tracked — gitignored, or never `git add`ed | 0 |
+| No harness on disk at all (nothing to version) | 0 |
+
+THE GRANDFATHERED CASE (8) — this is the row that only exists because
+of `git check-ignore`, and it is a real trap, not a technicality. Once
+`.claude/` matches a `.gitignore` pattern, files ALREADY tracked keep
+being tracked, so `git ls-files` looks perfectly healthy and the repo
+scores as if versioned. But the next agent, rule or hook someone adds
+is silently never staged: `git add .claude/agents/new.md` fails without
+an error anyone reads, and `git status` never mentions it. The harness
+quietly stops growing for the team while it keeps growing on one
+laptop. Award 8, and make it a Key Finding with the exact
+`<file>:<line>` that `git check-ignore -v --no-index` printed.
+
+SCORING NOTES:
+- 0 here is the loudest finding this rubric can produce short of an
+  empty repo. Lead Key Findings with it, and state both halves of the
+  truth plainly: the harness is real and was scored on its merits
+  (quote the dimension 1-8 subtotal), AND nobody else has it, so the
+  section is capped at 60 by Section 6 until one commit lands.
+- The fix is genuinely one or two lines, which is what makes this the
+  highest-leverage action in the report. Name them exactly:
+  `.gitignore` line N (from `git check-ignore -v --no-index`), then
+  `git add .claude CLAUDE.md`. If files were tracked and then ignored,
+  the pattern is the only thing to remove.
+- Do NOT charge for this twice. If dimension 10 scores 0 or 8, no other
+  dimension may deduct anything for tracking. Read Section 4.1's
+  warning again if you are tempted.
+- `.claude/settings.local.json` as the ONLY thing on disk is not a
+  harness at all: dimensions 1-8 score it 0 on their own terms, and
+  this dimension scores 0 for "no harness on disk", not for tracking.
 
 ────────────────────────────────────────────────────────────────────
 SECTION 5 — PRE-PUSH DETECTION (DIMENSION 5)
@@ -561,7 +698,31 @@ SECTION 6 — SCORE, LABEL AND MATURITY BAND
 ────────────────────────────────────────────────────────────────────
 
 The rubric total IS the section score: both are 0-100, so no scaling
-is needed. Sum the nine dimensions and report the integer.
+is needed. Sum the ten dimensions, apply the cap below, and report the
+integer.
+
+THE UNVERSIONED CAP — apply AFTER summing, BEFORE mapping the band and
+the label:
+
+  IF dimension 10 scored 0, the section score is min(sum, 60).
+
+That is the exact ceiling of the "harness básico" band. The cap encodes
+the rubric's thesis: a harness nobody else has cannot be called
+"sólido", no matter how good it is on the one machine that has it. It
+never applies at 5, 8 or 12 on dimension 10 — a partially-tracked
+harness is a real, shared harness with gaps, and the gaps are already
+priced.
+
+Report the cap explicitly when it bites. State the uncapped sum, the
+cap, and the reason, in one line inside the section body:
+
+  "Score: 60/100 (capped — dimensions 1-9 sum to 74, but `.claude/` is
+  excluded by `.gitignore:12`, so dimension 10 scores 0 and Section 6
+  caps the section at 60 until the harness is committed.)"
+
+Never silently emit the capped number. A reader who cannot see the 74
+cannot see that one commit is worth 26 points, and that is the whole
+finding.
 
 MATURITY BANDS (from the codelab, Appendix A) — reported inside the
 section body:
@@ -585,7 +746,9 @@ actually uses, and 86 is the 30-day target ("paved path").
 
 Do NOT apply subjective adjustments to the total. If a dimension feels
 harsh, that is the rubric working — the adjustment belongs in the
-action list, not the arithmetic.
+action list, not the arithmetic. The Section 6 cap is not a subjective
+adjustment: it is a stated rule with one trigger, and it is the only
+adjustment permitted.
 
 ────────────────────────────────────────────────────────────────────
 SECTION 7 — BUILDING THE ACTION LIST
@@ -599,7 +762,7 @@ RULES:
 1. SORT BY POINTS RECOVERED, DESCENDING. Not by dimension order, not
    by ease. The team is aiming at 85; the list must tell them the
    shortest path there.
-2. EVERY action opens with its delta in brackets: `[+16]`.
+2. EVERY action opens with its delta in brackets: `[+14]`.
 3. EVERY action ends with `→ dimension D, X/Y → Y/Y` — the dimension
    number, the current sub-score, and the sub-score after the fix.
 4. The how-to must be CONCRETE and specific to THIS repo: the file to
@@ -614,13 +777,27 @@ RULES:
    dimensions into one action — it makes the delta unverifiable at
    re-measure time.
 6. Partial recoveries get their own entry. If dimension 4 sits at
-   11/16 because failure is swallowed, the action is `[+2] Propagate
+   9/14 because failure is swallowed, the action is `[+2] Propagate
    the gate's exit code` with the exact line to change — not a vague
    "strengthen the hook".
 7. Only list actions that recover points. If a dimension is at full
    marks, it does not appear.
 8. State the total at the end: current score, score if every action
    lands, and whether that clears 85.
+9. WHEN THE SECTION 6 CAP IS ACTIVE (dimension 10 scored 0), the
+   versioning action goes FIRST regardless of the sort, because until
+   it lands, no other action can raise the reported score at all — the
+   cap absorbs them. Give it the COMBINED delta it actually recovers:
+   dimension 10's 12 points plus everything the cap was withholding.
+   - Format: `[+26] Commit the harness.` … `→ dimension 10, 0/12 →
+     12/12; lifts the Section 6 cap, 60 → 74.`
+   - Then add one line under the list: "Every action below assumes the
+     harness is committed first; while it is not, the section stays at
+     60 no matter what else lands."
+   - The remaining actions keep their own honest per-dimension deltas.
+     Do NOT restate them net of the cap — the arithmetic must still
+     reconcile against the uncapped sum, which is what rule 8 and the
+     verification checklist check.
 
 ────────────────────────────────────────────────────────────────────
 SECTION 8 — OUTPUT FORMAT
@@ -644,53 +821,61 @@ report-writer can lift it with minimal transformation:
 ## 11. AI Harness & Adoption
 
 **Description:** [one sentence]
-**Score:** [N]/100 ([Label])
+**Score:** [N]/100 ([Label])          ← if the Section 6 cap bit, say so
+                                        here: "60/100 (capped — see below)"
 **Maturity:** [sin harness | harness básico | harness sólido | paved path]
 
 ### Coverage
 | Dimension | Status | Points |
 |---|---|---|
-| CLAUDE.md | Present — 142 lines, build/test commands documented | 14/14 |
-| Rules | 2 rules, 1 with `paths:` scoped to <the stack glob> | 10/10 |
-| Permissions | settings.json committed, no deny of secrets | 8/14 |
-| Hooks | None configured | 0/16 |
-| Pre-push git hook | Missing | 0/12 |
-| Agents | 3 agents, 2 without `model:` | 8/12 |
-| Commands / Skills | 1 command, no argument-hint | 5/10 |
-| Advanced orchestration | No subagent/worktree/loop usage found | 0/6 |
-| Lifecycle & versioning | .claude/ committed; no documented lifecycle | 3/6 |
-| **Total** | | **48/100** |
+| CLAUDE.md | Present — 142 lines, build/test commands documented | 13/13 |
+| Rules | 2 rules, 1 with `paths:` scoped to <the stack glob> | 9/9 |
+| Permissions | settings.json present, no deny of secrets | 7/13 |
+| Hooks | None configured | 0/14 |
+| Pre-push git hook | Missing | 0/11 |
+| Agents | 3 agents, 2 without `model:` | 7/11 |
+| Commands / Skills | 1 command, no argument-hint, generic prose | 4/9 |
+| Advanced orchestration | No subagent/worktree/loop usage found | 0/5 |
+| Lifecycle | No documented plan→PR procedure | 0/3 |
+| Harness versioning | `.claude/` fully tracked, not ignored | 12/12 |
+| **Total** | | **52/100** |
 
 ### Key Findings
 ### Evidence                    ← real file paths only, never invented
 ### Risks
 
 ### Actions to Raise the Score
-1. **[+16] Add an autotest hook.** Create `scripts/check.sh` running
+1. **[+14] Add an autotest hook.** Create `scripts/check.sh` running
    <the gate command from Section 2> and exit 2 on failure, then
    register it as a PostToolUse hook matching `Edit|Write` with
    `timeout: 60` in `.claude/settings.json`.
-   → dimension 4, 0/16 → 16/16.
-2. **[+12] Add a pre-push hook.** Create `.githooks/pre-push` running
+   → dimension 4, 0/14 → 14/14.
+2. **[+11] Add a pre-push hook.** Create `.githooks/pre-push` running
    <the gate command from Section 2>, run
    `git config core.hooksPath .githooks`, and document the enable step
-   in the README. → dimension 5, 0/12 → 12/12.
+   in the README. → dimension 5, 0/11 → 11/11.
 3. **[+6] Add deny rules for secrets.** Add `Read(.env*)` and
    `Edit(.env*)` to `permissions.deny` in `.claude/settings.json`.
-   → dimension 3, 8/14 → 14/14.
+   → dimension 3, 7/13 → 13/13.
 4. **[+4] Declare `model:` on every agent.** `reviewer.md` and `qa.md`
-   have no `model:` key. → dimension 6, 8/12 → 12/12.
+   have no `model:` key. → dimension 6, 7/11 → 11/11.
 
 ### Counts & Metrics
 ```
 
 ⚠️ THE ACTION LIST ABOVE IS ABRIDGED — DO NOT COPY ITS LENGTH. It shows
-four actions worth 16+12+6+4 = 38 points, but that example scores 48/100,
-so 52 points are missing. A real artifact MUST also carry the three
-actions the example omits: `[+5]` dimension 7 (5/10 → 10/10), `[+6]`
-dimension 8 (0/6 → 6/6), and `[+3]` dimension 9 (3/6 → 6/6). 38 + 14 = 52
-= 100 − 48, and only then does the list satisfy Section 7's completeness
+four actions worth 14+11+6+4 = 35 points, but that example scores 52/100,
+so 48 points are missing. A real artifact MUST also carry the three
+actions the example omits: `[+5]` dimension 7 (4/9 → 9/9), `[+5]`
+dimension 8 (0/5 → 5/5), and `[+3]` dimension 9 (0/3 → 3/3). 35 + 13 = 48
+= 100 − 52, and only then does the list satisfy Section 7's completeness
 rule. The example is shape guidance, not a coverage target.
+
+Note that dimension 10 does not appear in this example's action list:
+it is already at 12/12, and Section 7 rule 7 says a dimension at full
+marks does not appear. Had it scored 0, it would be action #1 with the
+combined delta (Section 7 rule 9) and every other action would sit
+below the cap note.
 
 The `Status` column must be a FACT, not a verdict: "3 agents, 2 without
 `model:`" — a number and what is missing. Never "poor" or "needs work".
@@ -698,14 +883,18 @@ The `Status` column must be a FACT, not a verdict: "3 agents, 2 without
 COUNTS & METRICS — report at least:
 - CLAUDE.md: present/absent, line count
 - Rules: count, how many with `paths:`
-- Permissions: settings.json tracked yes/no, deny entries count, allow
+- Permissions: settings.json present yes/no, deny entries count, allow
   entries count, blanket wildcard present yes/no
 - Hooks: count by event, real-gate yes/no, timeout set yes/no
 - Pre-push: mechanism detected (or none), versioned yes/no
 - Agents: count, how many declare `model:`, how many declare `tools:`
 - Commands/Skills: counts
-- Existence subtotal /38, Quality subtotal /62
-- Total: N/100, band, points recoverable from the action list
+- Versioning: harness files on disk vs tracked (e.g. "9 on disk, 9
+  tracked"), `.gitignore` match for `.claude` yes/no + the
+  `<file>:<line>` if yes, cap applied yes/no
+- Existence subtotal /28, Quality subtotal /72
+- Total: N/100 (and the uncapped sum if the cap applied), band, points
+  recoverable from the action list
 
 ────────────────────────────────────────────────────────────────────
 SECTION 9 — EVIDENCE DISCIPLINE
@@ -726,7 +915,15 @@ NON-NEGOTIABLE — this audit is evidence-based:
   command. For a missing `model:`, name the agent files. The reader
   must be able to verify your judgement without re-running the audit.
 - Distinguish "missing" from "untracked" everywhere. They are different
-  findings with different one-line fixes.
+  findings with different one-line fixes, and under this rubric they
+  are different SCORES: missing costs the dimension's existence points,
+  untracked costs dimension 10 and nothing else. Writing "untracked"
+  where you mean "missing" (or the reverse) is a scoring error, not a
+  wording error.
+- When dimension 10 is not at 12, quote `git check-ignore -v --no-index`'s exact
+  output line, or state "not ignored; N of M harness files untracked"
+  with the file names. "The harness is not committed" without the paths
+  is not evidence.
 
 ────────────────────────────────────────────────────────────────────
 SECTION 10 — EDGE CASES
@@ -738,9 +935,27 @@ SECTION 10 — EDGE CASES
   is the highest-value report the rubric can emit, because every one of
   the 100 points is recoverable and the team has never seen the map.
   Spend ≤3 tool calls getting here.
-- HARNESS EXISTS BUT IS UNTRACKED: score every existence check that
-  requires git tracking as 0, and lead Key Findings with it. The score
-  is genuinely low and the fix is genuinely one commit — say both.
+- HARNESS EXISTS BUT IS UNTRACKED OR GITIGNORED: score dimensions 1-9
+  NORMALLY, entirely on what the files contain. Score dimension 10 at 0
+  and apply the Section 6 cap. Lead Key Findings with it, and report
+  both numbers — the uncapped sum and the capped score — because the
+  gap between them IS the value of the one commit. This is the case the
+  rubric was rewritten for: it used to collapse to ~14 and tell a team
+  with a real harness to go build one.
+  Do NOT let the cap tempt you into scoring dimensions 1-9 harshly to
+  "make the number look right". The uncapped sum is a real measurement
+  that the team will re-check after committing.
+- TRACKED BUT `.gitignore` MATCHES `.claude`: the grandfathered case.
+  `git ls-files` looks healthy; `git check-ignore -v --no-index` is the only thing
+  that sees it. Dimension 10 scores 8, the cap does NOT apply, and it
+  is a Key Finding: the harness is shared today and silently stops
+  growing tomorrow. Quote the `<file>:<line>:<pattern>` and make the
+  action "delete that line".
+- HARNESS ON DISK, `.git` ABSENT ENTIRELY (not a git repo): dimension
+  10 scores 0 and the cap applies, but the finding is different and the
+  action is `git init`, not `git add`. Say which one it is. If
+  `git ls-files` errors rather than returning empty, that is the tell —
+  do not report it as "nothing is committed".
 - MONOREPO: the harness is scored at the repo root, where Claude Code
   loads it. Nested `CLAUDE.md` files in packages are a bonus signal for
   dimension 1's quality (they are the "pro" shape), never a
@@ -751,15 +966,17 @@ SECTION 10 — EDGE CASES
   as a drift risk in Findings.
 - HARNESS PIECES OUTSIDE `.claude/`: some projects keep hook scripts in
   `scripts/` or `tools/`. That is fine and expected — dimension 4 asks
-  that the script be versioned in-repo, not that it live under
-  `.claude/`.
+  that the script live in-repo, not that it live under `.claude/`. Such
+  a script is also outside dimension 10's scope (`.claude/**` plus the
+  CLAUDE.md file): do not fail dimension 10 because `scripts/check.sh`
+  is untracked. Say it in Evidence and let dimension 4 judge the path.
 - THIS AUDIT'S OWN SKILL FILES: if the repo under audit is itself a
   repo of skills/agents (like this one), score only its OWN harness at
   the root — `.claude/`, `CLAUDE.md`, `.githooks/`. Do NOT score the
   `skills/**/agents/*.md` it ships as products; those are its output,
   not its harness. Getting this wrong inflates dimensions 6 and 8
   enormously.
-- A HOOK THAT CALLS A MISSING SCRIPT: existence 6 (it is configured),
+- A HOOK THAT CALLS A MISSING SCRIPT: existence 5 (it is configured),
   gate 0 (it cannot run). Flag it loudly — it is a silent no-op that
   the team believes is protecting them, which is worse than no hook.
 - MANY AGENTS (>10): do not read them in full. One Bash call with
@@ -767,15 +984,24 @@ SECTION 10 — EDGE CASES
   `description:` across `.claude/agents/*.md`, answers every dimension
   6 check. Stay in budget.
 - `.claude/` PRESENT BUT EMPTY (directory only, no files): treat as
-  absent for every dimension. Do not award existence points for a
-  directory.
+  absent for every dimension, dimension 10 included — an empty
+  directory is not an unversioned harness, it is no harness. Git cannot
+  track a directory anyway. Do not award existence points for a
+  directory, and do not apply the cap on its account.
 
 ────────────────────────────────────────────────────────────────────
 MANDATORY OUTPUT VERIFICATION
 ────────────────────────────────────────────────────────────────────
 
 Before writing the artifact, verify:
-- [ ] All 9 dimensions have a score, including the ones that scored 0
+- [ ] All 10 dimensions have a score, including the ones that scored 0
+- [ ] NO dimension other than 10 was reduced for a file being untracked
+      or gitignored. Existence was judged on disk, every time
+- [ ] Dimension 10 was scored from `git ls-files` CROSSED WITH
+      `git check-ignore -v --no-index` — not from `git ls-files` alone, which
+      cannot see the grandfathered case
+- [ ] `settings.local.json` and `CLAUDE.local.md` were excluded from
+      dimension 10's scope, not counted as untracked failures
 - [ ] Every dimension's score is decomposed into existence + quality,
       and no quality points were awarded on assumption
 - [ ] Dimension 1's cap was evaluated BEFORE summing its quality tests
@@ -785,14 +1011,18 @@ Before writing the artifact, verify:
       offending agent files are named
 - [ ] Dimension 5 was checked against ALL FIVE mechanisms in Section 5,
       in precedence order
-- [ ] The nine dimensions sum to the reported total; the total is an
+- [ ] The ten dimensions sum to the reported total; the total is an
       integer 0-100
-- [ ] The maturity band matches the total per Section 6's table
-- [ ] The Strong/Fair/Weak label matches the total per Section 6
+- [ ] The Section 6 cap was applied if and only if dimension 10 scored
+      0; if it applied, BOTH the uncapped sum and the capped score are
+      reported, with the reason
+- [ ] The maturity band matches the FINAL (capped) score per Section 6
+- [ ] The Strong/Fair/Weak label matches the FINAL score per Section 6
 - [ ] Every Evidence entry is a real path that was opened or listed
 - [ ] The action list is sorted by points descending, every entry has a
-      `[+N]` and a `→ dimension D, X/Y → Y/Y`
+      `[+N]` and a `→ dimension D, X/Y → Y/Y` — except that the
+      versioning action goes first when the cap is active (rule 9)
 - [ ] Every point gap in the Coverage table is accounted for by exactly
-      one action (Σ deltas = 100 − total)
+      one action (Σ deltas = 100 − UNCAPPED sum)
 - [ ] The artifact was written to the exact path the invoker specified, and nowhere else
 - [ ] Total tool calls ≤ 8

@@ -265,7 +265,7 @@ Operations section scoring.
 
 Goal: Score the project's AI harness — CLAUDE.md, `.claude/rules/`,
 `settings.json` permissions and hooks, `.claude/agents/`,
-commands/skills, and the pre-push git hook — on the 9-dimension,
+commands/skills, and the pre-push git hook — on the 10-dimension,
 100-point rubric that judges quality, not just presence.
 
 **Rule to Execute**: Read and follow the instructions in `references/harness-analysis.md`

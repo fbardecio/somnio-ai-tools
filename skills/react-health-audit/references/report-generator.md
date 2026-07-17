@@ -156,15 +156,16 @@ Description: [One-sentence description of the state of the harness]
 Score: [Score]/100 ([Label])
 Maturity: [sin harness | harness básico | harness sólido | paved path]
 Coverage:
-- CLAUDE.md: [Status] — [Points]/14
-- Rules: [Status] — [Points]/10
-- Permissions: [Status] — [Points]/14
-- Hooks: [Status] — [Points]/16
-- Pre-push git hook: [Status] — [Points]/12
-- Agents: [Status] — [Points]/12
-- Commands / Skills: [Status] — [Points]/10
-- Advanced orchestration: [Status] — [Points]/6
-- Lifecycle & versioning: [Status] — [Points]/6
+- CLAUDE.md: [Status] — [Points]/13
+- Rules: [Status] — [Points]/9
+- Permissions: [Status] — [Points]/13
+- Hooks: [Status] — [Points]/14
+- Pre-push git hook: [Status] — [Points]/11
+- Agents: [Status] — [Points]/11
+- Commands / Skills: [Status] — [Points]/9
+- Advanced orchestration: [Status] — [Points]/5
+- Lifecycle: [Status] — [Points]/3
+- Harness versioning: [Status] — [Points]/12
 - Total: [Points]/100
 Key Findings:
 - [Bullet point 1]
