@@ -242,18 +242,6 @@ class SkillRegistry {
       referencesRelativePath: 'skills/workflow-builder/references',
     ),
     WorkflowSkill(
-      id: 'ship',
-      name: 'ship',
-      displayName: 'Ship',
-      description:
-          'Fully automated ship workflow: merges the base branch, runs '
-          'tests, reviews the diff, bumps VERSION, updates CHANGELOG, '
-          'commits, pushes, and opens a pull request. Invoke when the '
-          'user asks to ship, deploy, push to main, or create a PR.',
-      planRelativePath:
-          'skills/ship/SKILL.md',
-    ),
-    WorkflowSkill(
       id: 'dart_model_from_json',
       name: 'dart-model-from-json',
       displayName: 'Dart Model from JSON',

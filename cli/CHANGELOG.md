@@ -5,6 +5,16 @@ All notable changes to the Somnio CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.2] - 2026-07-22
+
+### Added
+
+- **`somnio commands install`**: New CLI subcommand to list and install root-level commands at folder scope (current working directory) into `.claude/commands/` and `.cursor/commands/` for Claude Code and Cursor. Mirrors the existing `somnio rules install` workflow. Backed by a new `CommandBundle` model, `CommandRegistry`, and `CommandInstaller`.
+
+### Changed
+
+- **`ship` command moved to installable command**: The `ship` skill is now an installable command (via `somnio commands install`) instead of an auto-triggering skill. No longer auto-activates on skill trigger detection.
+
 ## [2.8.1] - 2026-07-17
 
 ### Changed

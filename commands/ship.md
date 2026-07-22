@@ -1,25 +1,7 @@
 ---
-name: ship
-description: >-
-  Ship workflow: merge base branch, run tests, review diff, bump VERSION,
-  update CHANGELOG, commit, push, create PR. Use when asked to "ship",
-  "deploy", "push to main", "create a PR", "merge and push", or "get it deployed".
-  Proactively invoke this skill when the user says code is ready, asks about
-  deploying, wants to push code up, or asks to create a PR.
-allowed-tools:
-  - Bash
-  - Read
-  - Write
-  - Edit
-  - Grep
-  - Glob
-  - Agent
-  - AskUserQuestion
-triggers:
-  - ship it
-  - create a pr
-  - push to main
-  - deploy this
+description: "Ship workflow — merge base, run tests, review diff, bump VERSION, update CHANGELOG, commit, push, open PR."
+argument-hint: ""
+allowed-tools: ["Bash", "Read", "Write", "Edit", "Grep", "Glob", "Agent", "AskUserQuestion"]
 ---
 
 # Ship: Fully Automated Ship Workflow

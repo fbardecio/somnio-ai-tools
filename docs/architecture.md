@@ -62,6 +62,8 @@ cli/lib/src/
 
 **Agent Registry** (`agents/agent_registry.dart`) — Data-driven definitions for all supported agents. Each `AgentConfig` declares binary, prompt style, install format, models, and token parser. Adding a new agent requires only a single entry here.
 
+**Command Registry** (`content/command_registry.dart`) — Static registry of installable commands (e.g. `ship`). Each `CommandBundle` defines paths to its `commands/<name>/` directory. Mirrored after `SkillRegistry` for consistent multi-agent distribution.
+
 **Content Loader** (`content/content_loader.dart`) — Reads SKILL.md plans and reference markdown files from the filesystem. References are parsed into `ParsedRule` objects.
 
 **Transformers** — Convert SKILL.md and references into agent-specific formats:
@@ -74,6 +76,8 @@ cli/lib/src/
 | `markdown` | Generic | Standard markdown |
 
 **Installers** — Write transformed skills to agent-specific locations (`~/.claude/skills/`, `~/.cursor/commands/`, etc.).
+
+**Command Installer** (`installers/command_installer.dart`) — Writes commands at folder scope (no transformer needed; commands are distributed as-is to `.claude/commands/` and `.cursor/commands/`). Backed by `somnio commands install`.
 
 **Runner** — Executes audits step-by-step, spawning a fresh AI CLI process per step via `AgentConfig.buildArgs()`.
 

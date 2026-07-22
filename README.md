@@ -133,13 +133,27 @@ somnio rules install --all --global           # all detected agents, global
 
 ## Commands
 
+Root-level commands installed at folder scope — project-specific extensions for Claude Code and Cursor.
+
+```bash
+somnio commands install                          # interactive: detect agents + choose which commands
+somnio commands install --agent claude --all     # Claude Code, all commands
+somnio commands install --agent cursor --all     # Cursor, all commands
+```
+
+Commands are written to `.claude/commands/` (Claude) and `.cursor/commands/` (Cursor) — project scope only, not global. Example: `ship` (merge, test, bump, changelog, commit, push, open PR).
+
+> [CLI reference →](docs/cli.md) · [Workflow guide →](docs/workflows.md)
+
+---
+
+## Slash Commands
+
 | Command | Description |
 |:--------|:------------|
 | `/somnio:audit` | Auto-detect project type and run the appropriate audit |
 | `/somnio:quick-check` | Fast 2-3 minute lightweight assessment |
 | `somnio run <alias>` | CLI: execute a multi-step audit from terminal |
-
-> [CLI reference →](docs/cli.md) · [Workflow guide →](docs/workflows.md)
 
 ---
 

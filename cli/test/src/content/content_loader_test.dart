@@ -104,18 +104,32 @@ void main() {
       expect(fm['allowed-tools'], 'Bash, Read, AskUserQuestion');
     });
 
-    test('reads the real ship skill, whose allowed-tools is a block sequence',
-        () {
-      // Anchored on the shipped file rather than a fixture: this is the skill
-      // that regressed, and a fixture would not catch it drifting again.
-      final repoRoot = p.dirname(Directory.current.path);
-      final fm =
-          ContentLoader(repoRoot).loadPlanFrontmatter('skills/ship/SKILL.md');
+    test(
+        'parses a block-sequence allowed-tools list that includes '
+        'AskUserQuestion', () {
+      // Regression fixture: a real skill's SKILL.md once declared
+      // allowed-tools as a YAML block sequence (rather than an inline list
+      // or comma-separated string) and AskUserQuestion silently dropped out
+      // of the parsed frontmatter.
+      _bundle(
+        repoRoot: tmp.path,
+        planContent: '---\n'
+            'name: demo\n'
+            'allowed-tools:\n'
+            '  - Bash\n'
+            '  - Read\n'
+            '  - AskUserQuestion\n'
+            '---\n\n'
+            '# Demo',
+      );
+
+      final fm = loader.loadPlanFrontmatter('skills/demo-skill/SKILL.md');
 
       expect(
         fm['allowed-tools'],
         contains('AskUserQuestion'),
-        reason: "ship's plan calls AskUserQuestion, so it must be declared",
+        reason:
+            'block-sequence allowed-tools must retain every declared tool',
       );
     });
 
