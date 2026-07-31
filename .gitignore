@@ -43,7 +43,7 @@ $RECYCLE.BIN/
 .project
 .classpath
 .settings/
-.claude
+.claude/settings.local.json
 .somnio
 
 # Logs
