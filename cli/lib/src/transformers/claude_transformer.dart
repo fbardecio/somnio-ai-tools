@@ -61,7 +61,12 @@ class ClaudeTransformer implements Transformer {
     // / `allowed-tools` (which carry the auto-activation trigger phrases)
     // over the shorter registry display strings.
     final planFrontmatter = loader.loadPlanFrontmatter(bundle.planRelativePath);
-    final skillMd = _generateSkillMd(bundle, plan, planFrontmatter);
+    final skillMd = _generateSkillMd(
+      bundle,
+      plan,
+      planFrontmatter,
+      {for (final rule in rules) rule.fileName},
+    );
 
     // Generate rule markdown files
     final ruleFiles = <String, String>{};
@@ -117,6 +122,7 @@ class ClaudeTransformer implements Transformer {
     SkillBundle bundle,
     String planContent,
     Map<String, String> planFrontmatter,
+    Set<String> ruleFileNames,
   ) {
     // Prefer the authored description: it carries the "Use when …" /
     // "Triggers on: …" clauses that drive Claude's skill auto-activation.
@@ -141,10 +147,17 @@ class ClaudeTransformer implements Transformer {
 
     // Transform @rule_name references to file references
     // Matches: `@rule_name` (with backticks)
+    //
+    // Only rewritten when the bundle actually ships `references/<name>.md`.
+    // The bare `@word` form is not exclusive to rule references: Angular's
+    // control-flow blocks (`@for`, `@if`, `@defer`) and framework decorators
+    // are prose, and rewriting them fabricated a path to a reference file that
+    // does not exist.
     content = content.replaceAllMapped(
       RegExp(r'`@(\w+)`'),
       (match) {
         final ruleName = match.group(1)!;
+        if (!ruleFileNames.contains(ruleName)) return match.group(0)!;
         return 'Read and follow the instructions in '
             '`references/$ruleName.md`';
       },

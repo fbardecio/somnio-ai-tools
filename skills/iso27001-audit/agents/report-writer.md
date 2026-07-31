@@ -33,9 +33,11 @@ Read and follow ALL instructions in `references/scoring.md` to compute the 11 ca
 
 Read and follow ALL instructions in `references/report-generator.md` for the mandatory report structure, dynamic section ordering, gap register, remediation plan, SoA starter, ISMS clause coverage, JSON export, and score history.
 
+Read and follow ALL instructions in `references/report-format-enforcer.md` for structural validation, formatting rules, secret redaction, exclusion/leak detection, and score-history export.
+
 Read `assets/report-template.md` for the mandatory report structure template.
 
-These three references are the single source of truth for weights, formulas, section structure, and validation checklists. Do not deviate from them.
+These four references are the single source of truth for weights, formulas, section structure, and validation checklists. Do not deviate from them.
 
 ## Artifact Inputs
 
@@ -57,6 +59,7 @@ Run before writing: `mkdir -p reports reports/.artifacts reports/.history`.
 - **Every control row carries a Status AND an Owner/lane.** CLIENT-lane controls are listed but never counted against the score.
 - **Apply dynamic section ordering**: sort the 11 category sections by score ascending; Not-Applicable categories go last.
 - **Keep the SoA starter and ISMS clause coverage first-class** - never drop them.
+- **Self-validate before writing**: apply all structural checks from `references/report-format-enforcer.md` to the draft; fix issues in-place before saving.
 - **Redact any secret VALUE** as `[REDACTED]`; never reproduce a secret.
 - **Do not include any company, client, product, or ticket name** - keep the report generic.
 - **Append the metadata block** at the very end of `reports/iso27001_audit.md` exactly as specified in `SKILL.md`, including the readiness/gap-assessment (not a certification) disclaimer.

@@ -27,4 +27,8 @@ Read `harness-audit/references/harness-scoring.md` and follow ALL instructions i
 
 Read `harness-audit/references/report-generator.md` and follow ALL instructions in the prompt field
 
-Save the report to `./reports/harness_audit.md`
+## Step 4: Validate and Export Report
+
+Read `harness-audit/references/report-format-enforcer.md` and follow ALL instructions in the prompt field
+
+Save the validated report to `./reports/harness_audit.md`

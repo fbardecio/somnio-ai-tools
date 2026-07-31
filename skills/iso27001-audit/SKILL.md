@@ -345,9 +345,38 @@ line with [Score]/100 ([Band]) format, a Score Breakdown (base,
 deductions/bonuses, final), the Annex A references it covers with per-control
 Status + Owner/lane, Evidence, Gaps, Risks, and Recommendations.
 
+## Step 15. Validate and Export Readiness Report
+
+Goal: Validate the generated report against structural and Markdown formatting
+rules, then save the final Markdown report.
+
+Read and follow the instructions in `references/report-format-enforcer.md`
+
+**Validation**: Read the generated report and validate ALL structural checks
+from the format enforcer rule: exactly 20 sections, Section 1 has 11 scored
+category lines + Overall + Band, the 11 scored category sections have Score
+lines, sections are ordered by score ascending (Not-Applicable last), band
+labels match ranges, every control row carries a Status + Owner/lane, the Annex
+A gap register has the required columns, the SoA starter and the ISMS clause
+coverage are present, no secret values appear, and proper Markdown syntax. Fix
+any issues in-place. If scores are missing entirely, re-run Step 13 and Step 14
+before exporting.
+
+**Export**: Save the validated report to `./reports/iso27001_audit.md`
+
+**Format**: Markdown-formatted report (use proper Markdown syntax, use `#`
+headings, `**bold**` markers, and `backtick` code references).
+
+**Command**:
+```bash
+mkdir -p reports
+# Save validated report to ./reports/iso27001_audit.md
+```
+
 ## Execution Summary
 
-**Total Rules**: 12 evidence rules + 1 scoring rule + 1 report generator
+**Total Rules**: 12 evidence rules + 1 scoring rule + 1 report generator + 1
+format enforcer
 
 **Rule Execution Order**:
 1. Read and follow the instructions in `references/project-detection.md` (MANDATORY - project/toolchain detection) {model: cheap}
@@ -364,6 +393,9 @@ Status + Owner/lane, Evidence, Gaps, Risks, and Recommendations.
 12. Read and follow the instructions in `references/evidence-isms-artifacts.md` (Category K + ISMS clauses 4-10 + SoA starter; Clauses 6, 9) {model: mid}
 13. Read and follow the instructions in `references/scoring.md` (computes 11 category scores + weighted overall + band) {model: frontier}
 14. Read and follow the instructions in `references/report-generator.md` (generates the readiness report, gap register, SoA starter, ISMS clause coverage) {model: frontier}
+
+**Post-Generation**: Read and follow the instructions in `references/report-format-enforcer.md` to validate and fix
+the report (runs automatically after step 14) {model: frontier}
 
 **Scoring System**:
 - 11 scored control categories with weighted rubrics (0-100 each)
@@ -418,7 +450,7 @@ criteria in `references/scoring.md` and `references/report-generator.md`.
 | `agents/access-data-analyzer.md` | cheap | `references/identity-access-management.md` (step 4) + `references/data-protection-confidentiality.md` (step 5) | `reports/.artifacts/step_04_iso27001_identity_access_management.md`, `reports/.artifacts/step_05_iso27001_data_protection_confidentiality.md` |
 | `agents/infra-secdev-analyzer.md` | mid | `references/secure-development-change.md` (step 6) + `references/infrastructure-network-security.md` (step 7) + `references/vulnerability-management-assurance.md` (step 8) | `reports/.artifacts/step_06_iso27001_secure_development_change.md`, `reports/.artifacts/step_07_iso27001_infrastructure_network_security.md`, `reports/.artifacts/step_08_iso27001_vulnerability_management_assurance.md` |
 | `agents/resilience-supplier-ai-analyzer.md` | mid | `references/incident-bcp-dr.md` (step 9) + `references/vendor-supplier-management.md` (step 10) + `references/ai-governance.md` (step 11) | `reports/.artifacts/step_09_iso27001_incident_bcp_dr.md`, `reports/.artifacts/step_10_iso27001_vendor_supplier_management.md`, `reports/.artifacts/step_11_iso27001_ai_governance.md` |
-| `agents/report-writer.md` | frontier | `references/scoring.md` (step 13) + `references/report-generator.md` (step 14) + `assets/report-template.md` | `reports/.artifacts/step_13_iso27001_scoring.md`, `reports/iso27001_audit.md`, `reports/iso27001_audit.json`, `reports/.history/last_iso27001_scores.json` |
+| `agents/report-writer.md` | frontier | `references/scoring.md` (step 13) + `references/report-generator.md` (step 14) + `references/report-format-enforcer.md` (step 15) + `assets/report-template.md` | `reports/.artifacts/step_13_iso27001_scoring.md`, `reports/iso27001_audit.md`, `reports/iso27001_audit.json`, `reports/.history/last_iso27001_scores.json` |
 
 **Model tiers** are provider-neutral symbolic names. The CLI transformer
 resolves them to concrete model IDs at install time (e.g. for Claude:

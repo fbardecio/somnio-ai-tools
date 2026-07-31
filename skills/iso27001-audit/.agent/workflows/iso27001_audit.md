@@ -73,4 +73,8 @@ Read `iso27001-audit/references/scoring.md` and follow ALL instructions in the p
 
 Read `iso27001-audit/references/report-generator.md` and follow ALL instructions in the prompt field
 
-Save the report to `./reports/iso27001_audit.md`
+## Step 15: Validate and Export Report
+
+Read `iso27001-audit/references/report-format-enforcer.md` and follow ALL instructions in the prompt field
+
+Save the validated report to `./reports/iso27001_audit.md`

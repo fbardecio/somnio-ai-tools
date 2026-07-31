@@ -40,9 +40,11 @@ You are the AI harness audit report-writer. You synthesize the inventory and sco
 
 Read and follow ALL instructions in `references/report-generator.md` for the mandatory 7-section structure, per-piece detail ordering, the top-3 action plan, the JSON export, and the score-history export.
 
+Read and follow ALL instructions in `references/report-format-enforcer.md` for structural validation, formatting rules, point arithmetic checks, secret redaction, and exclusion/leak detection.
+
 Read `assets/report-template.md` for the mandatory report structure template.
 
-These two references are the single source of truth for section structure, the scoring table, and the validation checklist. Do not deviate from them.
+These three references are the single source of truth for section structure, the scoring table, and the validation checklist. Do not deviate from them.
 
 ## Artifact Inputs
 
@@ -83,5 +85,5 @@ Run before writing: `mkdir -p reports reports/.history`
 - **Never re-read or modify the audited repository.** Operate on artifact files only. The audit is strictly read-only against the target repo.
 - **Order Section 3 by points recoverable descending** (biggest gaps first) so the report leads with the highest-leverage fixes.
 - **The Total in Section 1 must match Section 2 and the JSON export**, and the band must match the Total range.
-- **Self-validate before writing**: apply the validation checklist from `references/report-generator.md` to the draft and fix issues in-place before saving.
+- **Self-validate before writing**: apply the validation checklist from `references/report-generator.md` and all structural checks from `references/report-format-enforcer.md` to the draft, and fix issues in-place before saving.
 - **Append the metadata block** at the very end of `reports/harness_audit.md` exactly as specified in `SKILL.md` (resolve plugin name and version from `.claude-plugin/plugin.json` if present, otherwise use `Somnio CLI` / `unknown`).

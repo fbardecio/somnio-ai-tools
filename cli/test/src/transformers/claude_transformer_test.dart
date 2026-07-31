@@ -136,6 +136,14 @@ void main() {
         id: 'flutter_health',
         name: 'flutter-health-audit',
         planContent: 'Step 1: `@tool_installer` then continue.',
+        references: {
+          'tool_installer.md': _mdReference(
+            name: 'tool_installer',
+            description: 'Installs the toolchain.',
+            pattern: '*',
+            prompt: 'Install the toolchain.',
+          ),
+        },
       );
 
       final output = transformer.transformBundle(bundle, ContentLoader(tmp.path));
@@ -147,6 +155,33 @@ void main() {
         ),
       );
       expect(output.skillMd, isNot(contains('`@tool_installer`')));
+    });
+
+    test(
+        'leaves a `@word` that is not a reference file intact '
+        "(Angular's `@for` is prose, not a rule reference)", () {
+      final tmp = Directory.systemTemp.createTempSync('claude_atword_');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+
+      final bundle = _setupBundle(
+        repoRoot: tmp.path,
+        id: 'angular_plan',
+        name: 'angular-best-practices',
+        planContent: '- `trackBy` on `*ngFor` (or `@for` track) for lists',
+        references: {
+          'performance.md': _mdReference(
+            name: 'performance',
+            description: 'Performance checks.',
+            pattern: '*',
+            prompt: 'Check performance.',
+          ),
+        },
+      );
+
+      final output = transformer.transformBundle(bundle, ContentLoader(tmp.path));
+
+      expect(output.skillMd, contains('(or `@for` track) for lists'));
+      expect(output.skillMd, isNot(contains('references/for.md')));
     });
 
     test('rewrites @<prefix>_best_practices_check/plan/... when registry hits',

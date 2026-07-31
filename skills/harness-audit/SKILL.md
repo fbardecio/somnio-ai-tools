@@ -113,14 +113,45 @@ Read and follow the instructions in `references/report-generator.md`
 **Integration**: This rule integrates the inventory and scoring results and
 generates the final harness audit report from `assets/report-template.md`.
 
+## Step 4. Validate and Export Harness Audit Report
+
+Goal: Validate the generated report against structural and Markdown formatting
+rules, then save the final Markdown report.
+
+Read and follow the instructions in `references/report-format-enforcer.md`
+
+**Validation**: Read the generated report and validate ALL structural checks
+from the format enforcer rule: exactly 7 sections, Section 1 has one row per
+harness piece + Total + Maturity Band + legend, the per-piece scores sum to the
+Total, the Total matches Sections 2 and 5 and the JSON export, the band label
+matches the total's range, Section 3 is ordered by points recoverable
+descending, Section 4 lists exactly three next steps naming exact files, every
+awarded point cites evidence, and no secret values appear. Fix any issues
+in-place. If the scores are missing entirely, re-run Step 2 and Step 3 before
+exporting.
+
+**Export**: Save the validated report to `./reports/harness_audit.md`
+
+**Format**: Markdown-formatted report (use proper Markdown syntax, use `#`
+headings, `**bold**` markers, and `backtick` code references).
+
+**Command**:
+```bash
+mkdir -p reports
+# Save validated report to ./reports/harness_audit.md
+```
+
 ## Execution Summary
 
-**Total Rules**: 3 (inventory, scoring, report generation)
+**Total Rules**: 4 (inventory, scoring, report generation, format enforcement)
 
 **Rule Execution Order**:
 1. Read and follow the instructions in `references/harness-inventory.md` (locate every harness piece, read-only) {model: cheap}
 2. Read and follow the instructions in `references/harness-scoring.md` (apply the 7-piece /100 rubric + band) {model: mid}
 3. Read and follow the instructions in `references/report-generator.md` (per-piece table, total, band, top-3 next steps) {model: frontier}
+
+**Post-Generation**: Read and follow the instructions in `references/report-format-enforcer.md` to validate and fix
+the report (runs automatically after step 3) {model: frontier}
 
 **Scoring System**:
 
@@ -179,7 +210,7 @@ the report-writer handle it via the rejection criteria.
 | Agent file | Tier | References / steps covered | Artifact(s) written |
 |---|---|---|---|
 | `agents/harness-analyzer.md` | cheap→mid | `references/harness-inventory.md` (step 1) + `references/harness-scoring.md` (step 2) | `reports/.artifacts/step_01_harness_inventory.md`, `reports/.artifacts/step_02_harness_scoring.md` |
-| `agents/report-writer.md` | frontier | `references/report-generator.md` (step 3) + `assets/report-template.md` | `reports/harness_audit.md`, `reports/harness_audit.json`, `reports/.history/last_scores.json` |
+| `agents/report-writer.md` | frontier | `references/report-generator.md` (step 3) + `references/report-format-enforcer.md` (step 4) + `assets/report-template.md` | `reports/harness_audit.md`, `reports/harness_audit.json`, `reports/.history/last_scores.json` |
 
 **Model tiers** are provider-neutral symbolic names. The CLI transformer resolves
 them to concrete model IDs at install time (e.g. for Claude: cheap→haiku,
