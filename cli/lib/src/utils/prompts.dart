@@ -3,15 +3,20 @@ import 'dart:io' as io;
 
 import 'package:interact_cli/interact_cli.dart';
 
-/// Centralized interactive prompt helpers backed by `interact_cli`.
+import 'scrolling_picker.dart';
+
+/// Centralized interactive prompt helpers.
 ///
-/// Wraps [Select] / [MultiSelect] so every command shares the same
-/// Somnio-branded theme and the same non-interactive fallback logic.
+/// Wraps [ScrollingPicker] so every command shares the same Somnio-branded
+/// `interact_cli` theme and the same non-interactive fallback logic.
 ///
-/// `interact_cli` redraws menus with *relative* cursor movement
-/// (`cursorUp` + `eraseLine` per line), which is scroll-safe — unlike
-/// `mason_logger`'s absolute save/restore approach that caused the
-/// "jumping / duplicated lines" rendering bug.
+/// Menus redraw with *relative* cursor movement (`cursorUp` + `eraseLine` per
+/// line), which is scroll-safe — unlike `mason_logger`'s absolute
+/// save/restore approach that caused the "jumping / duplicated lines"
+/// rendering bug. Relative movement only holds while the frame fits in the
+/// window, so the picker scrolls a viewport instead of painting every option;
+/// `interact_cli`'s own `Select` / `MultiSelect` paint the full list and
+/// duplicated their first lines once it outgrew the terminal.
 class Prompts {
   Prompts._();
 
@@ -38,12 +43,14 @@ class Prompts {
     required List<String> options,
     int initialIndex = 0,
   }) {
-    return Select.withTheme(
+    return ScrollingPicker(
       theme: theme,
       prompt: prompt,
       options: options,
+      multi: false,
+      unicode: _supportsAnsi,
       initialIndex: initialIndex,
-    ).interact();
+    ).interact().first;
   }
 
   /// Single-choice menu over a list of string [choices], returning the
@@ -71,18 +78,29 @@ class Prompts {
     return choices[index];
   }
 
-  /// Multi-choice menu. Returns the list of selected indexes.
+  /// Multi-choice menu. Returns the list of selected indexes, ascending.
   ///
-  /// Navigate with ↑/↓, toggle with space, confirm with enter.
+  /// Navigate with ↑/↓, toggle with space, toggle every option with `a`,
+  /// confirm with enter. Lists taller than the window scroll instead of
+  /// overflowing it.
   static List<int> selectMany({
     required String prompt,
     required List<String> options,
     List<bool>? defaults,
   }) {
-    return MultiSelect.withTheme(
+    if (defaults != null && defaults.length != options.length) {
+      throw ArgumentError(
+        'Default selections have a different length of ${defaults.length} '
+        'than options of ${options.length}',
+      );
+    }
+
+    return ScrollingPicker(
       theme: theme,
       prompt: prompt,
       options: options,
+      multi: true,
+      unicode: _supportsAnsi,
       defaults: defaults,
     ).interact();
   }
