@@ -11,17 +11,30 @@ import '../agents/installed_skill_names.dart';
 import '../content/agent_rule.dart';
 import '../content/agent_rule_registry.dart';
 import '../installers/rules_installer.dart';
+import '../installers/skill_manifest.dart';
 import '../utils/package_resolver.dart';
 import '../utils/platform_utils.dart';
+import '../utils/prompts.dart';
 
-/// Removes all Somnio-installed skills, commands, and workflows.
+/// Uninstalls the somnio CLI itself, optionally taking the installed skills
+/// and rules with it.
+///
+/// Skills are dealt with *before* the CLI is deactivated: once the binary is
+/// gone the user has no `somnio skills remove` left to clean them up with, so
+/// the choice has to be offered up front rather than left as an exercise.
 class UninstallCommand extends Command<int> {
   UninstallCommand({required Logger logger}) : _logger = logger {
     argParser
       ..addFlag(
+        'skills',
+        help: 'Also remove installed skills and rules. Skips the prompt; '
+            'use --no-skills to keep them.',
+        defaultsTo: null,
+      )
+      ..addFlag(
         'force',
         abbr: 'f',
-        help: 'Skip confirmation prompt.',
+        help: 'Skip confirmation prompts.',
       )
       ..addFlag(
         'verbose',
@@ -39,22 +52,47 @@ class UninstallCommand extends Command<int> {
 
   @override
   String get description =>
-      'Remove all Somnio skills, commands, workflows, and rules.';
+      'Remove the somnio CLI from this machine, asking first whether to '
+      'also delete the installed skills and rules.\n'
+      '\n'
+      'Examples:\n'
+      '  somnio uninstall                 # asks about skills, then confirms\n'
+      '  somnio uninstall --skills --force\n'
+      '  somnio uninstall --no-skills     # remove the CLI, keep the skills';
 
   @override
   Future<int> run() async {
     final force = argResults!['force'] as bool;
     _verbose = argResults!['verbose'] as bool;
+    final skillsFlag = argResults!['skills'] as bool?;
 
     _logger.info('');
+    _logger.warn('This will remove the somnio CLI from your machine.');
+    _logger.info('');
+
+    // Ask about skills first: this is the last moment the CLI exists to do
+    // it. An explicit --skills/--no-skills wins; with no flag and no terminal
+    // to ask on, keep them — deleting a user's content on a guess is worse
+    // than leaving it behind, and `somnio skills remove` still exists until
+    // the CLI is gone.
+    final bool removeSkills;
+    if (skillsFlag != null) {
+      removeSkills = skillsFlag;
+    } else if (Prompts.isInteractive) {
+      removeSkills = _logger.confirm(
+        'Also remove all installed skills and rules?',
+        defaultValue: false,
+      );
+    } else {
+      removeSkills = false;
+    }
 
     if (!force) {
-      _logger.warn(
-        'This will remove all Somnio skills and rules from all agents.',
-      );
       _logger.info('');
       final confirmed = _logger.confirm(
-        'Proceed with uninstall?',
+        removeSkills
+            ? 'Remove the somnio CLI and all installed skills?'
+            : 'Remove the somnio CLI?',
         defaultValue: false,
       );
       if (!confirmed) {
@@ -62,26 +100,90 @@ class UninstallCommand extends Command<int> {
         _logger.info('Uninstall cancelled.');
         return ExitCode.success.code;
       }
-      _logger.info('');
     }
+    _logger.info('');
 
-    final removeProgress = _logger.progress('Removing all installations');
+    if (removeSkills) {
+      final removeProgress = _logger.progress('Removing skills and rules');
 
-    var removedAnything = removeAgentInstalls(
-      home: PlatformUtils.homeDirectory,
-      onRemoved: _verbose ? _logger.info : null,
-    );
+      var removedAnything = removeAgentInstalls(
+        home: PlatformUtils.homeDirectory,
+        onRemoved: _verbose ? _logger.info : null,
+      );
 
-    // Remove agent rules (installed via `somnio rules install`)
-    removedAnything |= await _removeRules();
+      // Covers what the home-scoped sweep above cannot: project-scoped
+      // installs, and the `.somnio-skills.json` files themselves.
+      removedAnything |= removeManifestTrackedInstalls(
+        home: PlatformUtils.homeDirectory,
+        projectRoot: Directory.current.path,
+        onRemoved: _verbose ? _logger.info : null,
+      );
 
-    if (removedAnything) {
-      removeProgress.complete('Uninstall complete');
+      // Remove agent rules (installed via `somnio rules install`)
+      removedAnything |= await _removeRules();
+
+      if (removedAnything) {
+        removeProgress.complete('Skills and rules removed');
+      } else {
+        removeProgress.complete('No skills or rules found');
+      }
     } else {
-      removeProgress.complete('Nothing to uninstall');
+      _logger.info(
+        'Keeping installed skills — remove them later by reinstalling the '
+        'CLI and running "somnio skills remove".',
+      );
     }
 
-    return ExitCode.success.code;
+    _logger.info('');
+    return _deactivateCli();
+  }
+
+  /// Runs `dart pub global deactivate somnio` to remove the CLI binary.
+  ///
+  /// Deactivating the currently-running package is safe: this process is
+  /// already loaded, so it finishes normally — only the next invocation is
+  /// gone.
+  Future<int> _deactivateCli() async {
+    final progress = _logger.progress('Removing the somnio CLI');
+    try {
+      final result = await Process.run(
+        'dart',
+        ['pub', 'global', 'deactivate', 'somnio'],
+      );
+
+      final stderr = (result.stderr as String).trim();
+
+      // Not activated at all (e.g. installed some other way) is a no-op, not
+      // a failure — the desired end state is already true.
+      if (result.exitCode != 0 && stderr.contains('No active package')) {
+        progress.complete('somnio CLI was not installed via pub global');
+        return ExitCode.success.code;
+      }
+
+      if (result.exitCode != 0) {
+        progress.fail('Failed to remove the CLI');
+        if (stderr.isNotEmpty) _logger.err(stderr);
+        _logger.info('');
+        _logger.info(
+          'You can remove it manually:\n'
+          '  dart pub global deactivate somnio',
+        );
+        return ExitCode.software.code;
+      }
+
+      progress.complete('somnio CLI removed');
+      _logger.info('');
+      _logger.info('Thanks for using somnio.');
+      return ExitCode.success.code;
+    } catch (e) {
+      progress.fail('Failed to remove the CLI: $e');
+      _logger.info('');
+      _logger.info(
+        'You can remove it manually:\n'
+        '  dart pub global deactivate somnio',
+      );
+      return ExitCode.software.code;
+    }
   }
 
   /// Somnio block markers used by the rules installer for single-file formats.
@@ -281,6 +383,89 @@ bool removeAgentInstalls({
   }
 
   return removed;
+}
+
+/// Removes every manifest-recorded install for all registered agents, across
+/// both the global ([home]) and project ([projectRoot]) scopes, then the
+/// `.somnio-skills.json` manifests themselves.
+///
+/// [removeAgentInstalls] only sweeps [home] and matches by name, so this is
+/// what catches project-scoped installs (`./.claude/skills/...`) and clears
+/// the manifest bookkeeping the name-based sweep leaves behind.
+///
+/// Returns `true` if anything was removed. [onRemoved] receives one message
+/// per deleted path, for `--verbose` output. Top-level rather than a class
+/// member for the same reason as [removeAgentInstalls]: so it can be tested
+/// against a temp directory without spinning up the full command.
+bool removeManifestTrackedInstalls({
+  required String home,
+  required String projectRoot,
+  void Function(String message)? onRemoved,
+}) {
+  var removed = false;
+
+  for (final agent in AgentRegistry.installableAgents) {
+    final scopes = [
+      InstallScope.global,
+      if (agent.supportsProjectScope) InstallScope.project,
+    ];
+
+    for (final scope in scopes) {
+      final installDir = agent.resolvedScopedInstallPath(
+        scope: scope,
+        home: home,
+        projectRoot: projectRoot,
+      );
+      final manifest = SkillManifest.load(installDir);
+      if (manifest.isEmpty) continue;
+
+      for (final entry in manifest.entries.toList()) {
+        for (final path in entry.paths) {
+          final base = path.root == ManifestRoot.install
+              ? installDir
+              : agent.resolvedScopedExecutionRulesPath(
+                  scope: scope,
+                  home: home,
+                  projectRoot: projectRoot,
+                );
+          final target = p.join(base, path.path);
+          if (_deleteEntity(target)) {
+            onRemoved?.call('  Removed: $target');
+            removed = true;
+          }
+        }
+        manifest.removeEntry(entry.skill);
+      }
+
+      // Now empty, so this deletes the manifest file itself.
+      manifest.save();
+      removed = true;
+    }
+  }
+
+  return removed;
+}
+
+/// Deletes whatever is at [path], unlinking a symlink rather than following
+/// it (skills.sh installs some skill dirs as symlinks; recursing through one
+/// would delete the user's source tree). Returns whether anything was there.
+bool _deleteEntity(String path) {
+  final link = Link(path);
+  if (link.existsSync()) {
+    link.deleteSync();
+    return true;
+  }
+  final dir = Directory(path);
+  if (dir.existsSync()) {
+    dir.deleteSync(recursive: true);
+    return true;
+  }
+  final file = File(path);
+  if (file.existsSync()) {
+    file.deleteSync();
+    return true;
+  }
+  return false;
 }
 
 bool _removeClaudeInstall(String home, void Function(String)? onRemoved) {

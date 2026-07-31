@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **`somnio update` now updates only the CLI.** It no longer wipes and reinstalls every skill on every agent. Use `somnio skills update` for that. The `--legacy`, `--all-skills` and `--post-update` flags are gone.
+- **`somnio uninstall` now removes the CLI itself** (`dart pub global deactivate somnio`), asking first whether to also delete the installed skills and rules. The question comes first because once the binary is gone there is no `somnio skills remove` left to run; answering no keeps the skills in place. New `--skills` / `--no-skills` flags answer it up front. When skills are removed it now also clears project-scoped installs and the `.somnio-skills.json` manifests, which the old home-only sweep left behind.
 
 ## [2.9.0] - 2026-07-31
 

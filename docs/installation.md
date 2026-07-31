@@ -143,7 +143,9 @@ somnio skills update  # Refresh installed skills (global and project)
 somnio uninstall
 ```
 
-Removes all Somnio skills from all agents. Prompts for confirmation unless `--force` is passed.
+Removes the somnio CLI from your machine. It first asks whether to also delete the installed skills and rules — answer no to keep them. Pass `--skills` / `--no-skills` to answer up front, and `--force` to skip the confirmation.
+
+To remove only the skills and keep the CLI, use `somnio skills remove` instead.
 
 ---
 

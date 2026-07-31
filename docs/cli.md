@@ -35,7 +35,7 @@ somnio -q status      # Quiet mode (suppress banner)
 | `somnio add <tech>` | Add a new technology's audit skills (scaffolds + registers) |
 | `somnio status` | Show installed skills across all agents |
 | `somnio update` | Update the CLI binary only (skills are managed by `somnio skills`) |
-| `somnio uninstall` | Remove all Somnio skills from all agents |
+| `somnio uninstall` | Remove the CLI, optionally with the installed skills |
 | `somnio rules` | Install coding-standard rules for all detected agents |
 | `somnio workflow` | Create, configure, and run custom workflows |
 | `somnio quote` | Display a random motivational quote |
@@ -204,18 +204,26 @@ somnio update --verbose   # Show the raw output of the update process
 
 ### somnio uninstall
 
-Remove all Somnio-installed skills, commands, workflows, and rules from all agents.
+Remove the somnio CLI from this machine (`dart pub global deactivate somnio`). Before doing so it asks, Yes/No, whether to also delete the installed skills and rules — that question comes first because once the binary is gone there is no `somnio skills remove` left to run.
+
+Answering **no** keeps your skills in place; the CLI is removed and the skills stay where they are.
 
 ```bash
-somnio uninstall            # Prompts for confirmation, then removes everything
-somnio uninstall --force    # Skip confirmation prompt
-somnio uninstall --verbose  # Show each removed file
+somnio uninstall              # Asks about skills, then confirms
+somnio uninstall --skills     # Remove the CLI and the skills, no prompt
+somnio uninstall --no-skills  # Remove the CLI, keep the skills
+somnio uninstall --force      # Skip the confirmation prompt
 ```
 
 | Flag | Short | Description |
 |------|-------|-------------|
+| `--skills` / `--no-skills` | | Answer the skills question up front instead of being prompted |
 | `--force` | `-f` | Skip the confirmation prompt |
 | `--verbose` | `-v` | Show each removed file |
+
+When skills are removed it clears the global installs, the current project's installs, the `.somnio-skills.json` manifests, and the agent rules installed by `somnio rules install`. Deactivating a CLI that was not installed through `dart pub global` is treated as a no-op, not an error.
+
+> To remove skills without removing the CLI, use [`somnio skills remove`](#somnio-skills-remove) instead.
 
 ### somnio rules
 

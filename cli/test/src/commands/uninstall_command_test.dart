@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:somnio/src/commands/uninstall_command.dart';
+import 'package:somnio/src/installers/skill_manifest.dart';
 import 'package:test/test.dart';
 
 /// Creates [path] with [contents], including any missing parent directories.
@@ -192,6 +193,121 @@ void main() {
       );
 
       expect(removeAgentInstalls(home: home.path), isTrue);
+    });
+  });
+
+  group('removeManifestTrackedInstalls', () {
+    late Directory home;
+    late Directory project;
+
+    setUp(() {
+      home = Directory.systemTemp.createTempSync('uninstall_manifest_home_');
+      project = Directory.systemTemp.createTempSync('uninstall_manifest_proj_');
+    });
+
+    tearDown(() {
+      if (home.existsSync()) home.deleteSync(recursive: true);
+      if (project.existsSync()) project.deleteSync(recursive: true);
+    });
+
+    /// Installs a fake somnio skill for Claude under [root] and records it in
+    /// that location's manifest, mirroring what AgentInstaller writes.
+    void seedClaudeSkill(String root, String skill) {
+      final dir = p.join(root, '.claude', 'skills');
+      _writeFile(p.join(dir, skill, 'SKILL.md'));
+      SkillManifest.load(dir)
+        ..record(
+          skill: skill,
+          kind: 'audit',
+          paths: [ManifestPath(ManifestRoot.install, skill)],
+        )
+        ..save();
+    }
+
+    test('removes a project-scoped install the home sweep cannot reach', () {
+      seedClaudeSkill(project.path, 'security-audit');
+
+      final removed = removeManifestTrackedInstalls(
+        home: home.path,
+        projectRoot: project.path,
+      );
+
+      expect(removed, isTrue);
+      expect(
+        Directory(
+          p.join(project.path, '.claude', 'skills', 'security-audit'),
+        ).existsSync(),
+        isFalse,
+        reason: 'project-scoped installs must be removed on uninstall',
+      );
+    });
+
+    test('deletes the manifest file itself, leaving no bookkeeping behind', () {
+      seedClaudeSkill(project.path, 'security-audit');
+      final manifestPath = p.join(
+        project.path,
+        '.claude',
+        'skills',
+        SkillManifest.fileName,
+      );
+      expect(File(manifestPath).existsSync(), isTrue);
+
+      removeManifestTrackedInstalls(
+        home: home.path,
+        projectRoot: project.path,
+      );
+
+      expect(File(manifestPath).existsSync(), isFalse);
+    });
+
+    test('never touches a skill absent from the manifest', () {
+      seedClaudeSkill(project.path, 'security-audit');
+      final mine = p.join(project.path, '.claude', 'skills', 'my-own-skill');
+      _writeFile(p.join(mine, 'SKILL.md'), 'hand written');
+
+      removeManifestTrackedInstalls(
+        home: home.path,
+        projectRoot: project.path,
+      );
+
+      expect(
+        File(p.join(mine, 'SKILL.md')).readAsStringSync(),
+        'hand written',
+        reason: 'uninstall must only delete what the CLI recorded installing',
+      );
+    });
+
+    test('clears both the global and the project scope in one pass', () {
+      seedClaudeSkill(home.path, 'security-audit');
+      seedClaudeSkill(project.path, 'flutter-health-audit');
+
+      removeManifestTrackedInstalls(
+        home: home.path,
+        projectRoot: project.path,
+      );
+
+      expect(
+        Directory(
+          p.join(home.path, '.claude', 'skills', 'security-audit'),
+        ).existsSync(),
+        isFalse,
+      );
+      expect(
+        Directory(
+          p.join(project.path, '.claude', 'skills', 'flutter-health-audit'),
+        ).existsSync(),
+        isFalse,
+      );
+    });
+
+    test('returns false when nothing is recorded anywhere', () {
+      expect(
+        removeManifestTrackedInstalls(
+          home: home.path,
+          projectRoot: project.path,
+        ),
+        isFalse,
+      );
     });
   });
 }
