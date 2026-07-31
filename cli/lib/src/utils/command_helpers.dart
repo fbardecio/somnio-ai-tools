@@ -76,7 +76,7 @@ class CommandHelpers {
     logger.info('Next steps:');
     logger.info('  Run audit:    somnio run fh');
     logger.info('  Check status: somnio status');
-    logger.info('  Update:       somnio update');
+    logger.info('  Update:       somnio skills update');
   }
 
   /// Title-cases a string (first character uppercase).

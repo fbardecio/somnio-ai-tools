@@ -28,6 +28,12 @@ enum InstallFormat {
 }
 
 /// Whether skills are installed globally or per-project.
+///
+/// [global] anchors the `{home}` placeholder in an agent's install-path
+/// template at the user's home directory (e.g. `~/.claude/skills`).
+/// [project] re-anchors that same placeholder at the current project root
+/// instead (e.g. `<project>/.claude/skills`), so the install lives alongside
+/// the codebase rather than in the user's global config.
 enum InstallScope { global, project }
 
 /// Configuration for a single AI agent supported by somnio.
@@ -240,6 +246,41 @@ class AgentConfig {
       path = path.replaceAll('{name}', name);
     }
     return path;
+  }
+
+  /// Whether this agent has a meaningful per-project install location.
+  ///
+  /// Project scope works by re-anchoring the `{home}` placeholder at the
+  /// project root, so it only makes sense for agents whose install path is
+  /// home-relative (`{home}/.claude/skills` -> `<project>/.claude/skills`).
+  bool get supportsProjectScope => installPath.startsWith('{home}');
+
+  /// Resolves the install path for [scope], anchoring at [home] for
+  /// [InstallScope.global] and at [projectRoot] for [InstallScope.project].
+  String resolvedScopedInstallPath({
+    required InstallScope scope,
+    required String home,
+    required String projectRoot,
+    String? name,
+  }) {
+    return resolvedInstallPath(
+      home: scope == InstallScope.global ? home : projectRoot,
+      name: name,
+    );
+  }
+
+  /// Resolves the execution rules path for [scope], anchoring at [home] for
+  /// [InstallScope.global] and at [projectRoot] for [InstallScope.project].
+  String resolvedScopedExecutionRulesPath({
+    required InstallScope scope,
+    required String home,
+    required String projectRoot,
+    String? name,
+  }) {
+    return resolvedExecutionRulesPath(
+      home: scope == InstallScope.global ? home : projectRoot,
+      name: name,
+    );
   }
 
   /// The provider-neutral capability tiers audit skills may declare.

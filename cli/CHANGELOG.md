@@ -5,6 +5,21 @@ All notable changes to the Somnio CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] - 2026-07-31
+
+### Added
+
+- **`somnio skills` command group**: skills now have their own lifecycle, independent of the CLI binary.
+  - `somnio skills install` — pick which skills to install and WHERE: globally (the agent's config dir, e.g. `~/.claude/skills`) or per project (`<project>/.claude/skills`). Flags: `--agent`, `--all-agents`, `--skills`, `--all-skills`, `--global`, `--project`.
+  - `somnio skills update` — refreshes only the skills that are actually installed, overwriting them with the latest version. Checks BOTH global and project locations for every agent and updates whichever exist.
+  - `somnio skills remove` (alias `uninstall`) — deletes installed skills, asking global or project, and only ever removes skills the CLI itself installed.
+- **Install manifest** (`.somnio-skills.json`): each agent install directory now records the exact paths somnio wrote, per skill. This is what lets `skills update` and `skills remove` act only on CLI-installed content instead of guessing by name — hand-authored skills sharing a name are never touched.
+- **Per-project skill installs**: `AgentConfig` gained `supportsProjectScope`, `resolvedScopedInstallPath` and `resolvedScopedExecutionRulesPath`, re-anchoring the `{home}` placeholder at the project root.
+
+### Changed
+
+- **`somnio update` now updates only the CLI.** It no longer wipes and reinstalls every skill on every agent. Use `somnio skills update` for that. The `--legacy`, `--all-skills` and `--post-update` flags are gone.
+
 ## [2.9.0] - 2026-07-31
 
 ### Added

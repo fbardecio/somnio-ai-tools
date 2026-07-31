@@ -11,6 +11,7 @@ import '../transformers/transformer.dart';
 import '../utils/platform_utils.dart';
 import '../utils/yaml_frontmatter.dart';
 import 'installer.dart';
+import 'skill_manifest.dart';
 
 /// Generic installer that works for any [AgentConfig].
 ///
@@ -21,19 +22,57 @@ class AgentInstaller extends Installer {
     required super.logger,
     required super.loader,
     required this.agentConfig,
-  });
+    this.scope = InstallScope.global,
+    String? projectRoot,
+    this.recordManifest = true,
+  }) : projectRoot = projectRoot ?? Directory.current.path;
 
   final AgentConfig agentConfig;
 
+  /// Whether to install into the agent's global (home-anchored) location or
+  /// a project-local one. Defaults to [InstallScope.global] so the four
+  /// existing call sites (install/update/setup/status commands and
+  /// interactive install) keep today's behavior unchanged.
+  final InstallScope scope;
+
+  /// Root directory [InstallScope.project] re-anchors `{home}` at. Defaults
+  /// to the current working directory so callers that don't pass it get the
+  /// natural "wherever the CLI was invoked" answer.
+  final String projectRoot;
+
+  /// Whether to write `.somnio-skills.json`. Always true in normal use; the
+  /// escape hatch exists for callers that only probe paths.
+  final bool recordManifest;
+
   String get _home => PlatformUtils.homeDirectory;
 
-  /// Resolves the base install directory for this agent.
-  String get _installDir => agentConfig.resolvedInstallPath(home: _home);
+  /// Resolves the base install directory for this agent, honouring [scope].
+  String get _installDir => agentConfig.resolvedScopedInstallPath(
+        scope: scope,
+        home: _home,
+        projectRoot: projectRoot,
+      );
+
+  /// Resolves the execution-rules directory for this agent, honouring
+  /// [scope] — a project install must keep its rules alongside the project,
+  /// not leak them into the user's global home directory.
+  String get _rulesDir => agentConfig.resolvedScopedExecutionRulesPath(
+        scope: scope,
+        home: _home,
+        projectRoot: projectRoot,
+      );
 
   @override
   Future<InstallResult> install({required List<SkillBundle> bundles}) async {
     final baseDir = _installDir;
     final transformer = transformerFor(agentConfig.installFormat);
+
+    // Loaded once up front and saved once at the end: `remove`/`update` need
+    // an exact record of what somnio wrote so they can delete precisely
+    // those paths instead of guessing from name collisions against the
+    // registry (a third-party skill dir that happens to share a name with
+    // one of ours must never be touched).
+    final manifest = SkillManifest.load(baseDir);
 
     var skillCount = 0;
     var ruleCount = 0;
@@ -49,28 +88,38 @@ class AgentInstaller extends Installer {
           continue;
         }
 
+        final paths = <ManifestPath>[];
+
         // Prune the bundle's own directory so files a content update renamed
         // or dropped don't survive a reinstall. Only `<baseDir>/<name>/` is
         // somnio-owned — baseDir itself also holds third-party skills.
         if (agentConfig.installFormat == InstallFormat.skillDir) {
           _prune(p.join(baseDir, bundle.name));
+          paths.add(ManifestPath(ManifestRoot.install, bundle.name));
         }
 
         // Write all files from the transform output.
         for (final entry in output.files.entries) {
           _writeFile(p.join(baseDir, entry.key), entry.value);
           ruleCount++;
+          // Record every individual file for non-skillDir formats: some
+          // (e.g. `global_workflows/`) are shared directories other skills
+          // also write into, so the directory itself must never be recorded
+          // as somnio-owned — only the specific files somnio wrote.
+          if (agentConfig.installFormat != InstallFormat.skillDir) {
+            paths.add(ManifestPath(ManifestRoot.install, entry.key));
+          }
         }
 
         // For singleFile and skillDir formats that also need execution
         // rules (e.g., Cursor installs commands + separate .md rules)
         if (agentConfig.executionRulesPath != null &&
             agentConfig.installFormat != InstallFormat.workflow) {
-          final rulesDir = agentConfig.resolvedExecutionRulesPath(
-            home: _home,
-          );
-          _installExecutionRules(bundle, rulesDir);
+          _installExecutionRules(bundle, _rulesDir);
+          paths.add(ManifestPath(ManifestRoot.rules, bundle.planSubDir));
         }
+
+        manifest.record(skill: bundle.name, kind: 'audit', paths: paths);
 
         skillCount++;
       } catch (e) {
@@ -78,6 +127,8 @@ class AgentInstaller extends Installer {
         logger.err('  Failed to install ${bundle.name}: $e');
       }
     }
+
+    if (recordManifest) manifest.save();
 
     return InstallResult(
       skillCount: skillCount,
@@ -139,6 +190,13 @@ class AgentInstaller extends Installer {
     final baseDir = _installDir;
     var count = 0;
     var failed = 0;
+
+    // Loaded fresh from disk (not carried over from `install()`) so this
+    // method also works standalone; when the two run back-to-back on the
+    // same instance/baseDir, `SkillManifest.load` re-reading here picks up
+    // whatever `install()` already saved, so entries from both calls end up
+    // in the file rather than one clobbering the other.
+    final manifest = SkillManifest.load(baseDir);
 
     for (final skill in skills) {
       try {
@@ -207,12 +265,26 @@ class AgentInstaller extends Installer {
                 entry.value,
               );
             }
+            // The whole directory is somnio-owned — covers SKILL.md,
+            // references/, and any asset dirs written above.
+            manifest.record(
+              skill: skill.name,
+              kind: 'workflow',
+              paths: [ManifestPath(ManifestRoot.install, skill.name)],
+            );
 
           case InstallFormat.singleFile:
             // Cursor: single .md command file
             _writeFile(
               p.join(baseDir, '${skill.name}.md'),
               _withInlineReferences(content, refFiles),
+            );
+            manifest.record(
+              skill: skill.name,
+              kind: 'workflow',
+              paths: [
+                ManifestPath(ManifestRoot.install, '${skill.name}.md'),
+              ],
             );
 
           case InstallFormat.workflow:
@@ -225,9 +297,16 @@ class AgentInstaller extends Installer {
                 '${foldYamlBlock(description)}'
                 '---\n\n'
                 '${_withInlineReferences(content, refFiles)}';
-            _writeFile(
-              p.join(baseDir, 'global_workflows', 'somnio_$underscored.md'),
-              wrapped,
+            final workflowPath =
+                p.join('global_workflows', 'somnio_$underscored.md');
+            _writeFile(p.join(baseDir, workflowPath), wrapped);
+            // Only the specific file is recorded, never the
+            // `global_workflows/` directory itself — it's shared with other
+            // skills' workflow files, so it must never be deleted wholesale.
+            manifest.record(
+              skill: skill.name,
+              kind: 'workflow',
+              paths: [ManifestPath(ManifestRoot.install, workflowPath)],
             );
 
           case InstallFormat.markdown:
@@ -259,6 +338,13 @@ class AgentInstaller extends Installer {
               p.join(baseDir, '$underscored.md'),
               buffer.toString(),
             );
+            manifest.record(
+              skill: skill.name,
+              kind: 'workflow',
+              paths: [
+                ManifestPath(ManifestRoot.install, '$underscored.md'),
+              ],
+            );
         }
 
         count++;
@@ -267,6 +353,8 @@ class AgentInstaller extends Installer {
         logger.err('  Failed to install ${skill.name}: $e');
       }
     }
+
+    if (recordManifest) manifest.save();
 
     return (installed: count, failed: failed);
   }

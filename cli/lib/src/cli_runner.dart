@@ -11,6 +11,7 @@ import 'commands/quote_command.dart';
 import 'commands/rules_command.dart';
 import 'commands/run_command.dart';
 import 'commands/setup_command.dart';
+import 'commands/skills_command.dart';
 import 'commands/status_command.dart';
 import 'commands/uninstall_command.dart';
 import 'commands/update_command.dart';
@@ -45,6 +46,7 @@ class SomnioCliRunner extends CommandRunner<int> {
     addCommand(HooksCommand(logger: _logger));
     addCommand(InstallCommand(logger: _logger));
     addCommand(RulesCommand(logger: _logger));
+    addCommand(SkillsCommand(logger: _logger));
     addCommand(UpdateCommand(logger: _logger));
     addCommand(QuoteCommand());
     addCommand(RunCommand(logger: _logger));
