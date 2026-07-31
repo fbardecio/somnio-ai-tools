@@ -62,6 +62,7 @@ somnio setup
 | [Angular Health Audit](docs/skills.md#angular-health-audit) | `ah` | 13-step modern Angular (2+) health audit with weighted scoring |
 | [NestJS Health Audit](docs/skills.md#nestjs-health-audit) | `nh` | 13-step backend health audit with weighted scoring |
 | [NestJS Best Practices](docs/skills.md#nestjs-best-practices) | `np` | DTO, architecture, and error handling validation |
+| [SOC 2 Readiness Audit](docs/skills.md#soc-2-readiness-audit) | `s2` | Whole-project SOC 2 Trust Services Criteria readiness & gap analysis |
 | [React Health Audit](docs/skills.md#react-health-audit) | `rh` | 13-step frontend health audit with weighted scoring |
 | [React Best Practices](docs/skills.md#react-best-practices) | `rp` | Component, hooks, state management, and TypeScript validation |
 | [AngularJS Best Practices](docs/skills.md#angularjs-best-practices) | `ajp` | AngularJS 1.x code-quality validation (DI-safety, digest, testing) |
