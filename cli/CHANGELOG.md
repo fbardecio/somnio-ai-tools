@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`somnio skills` command group**: skills now have their own lifecycle, independent of the CLI binary.
   - `somnio skills install` — pick which skills to install and WHERE: globally (the agent's config dir, e.g. `~/.claude/skills`) or per project (`<project>/.claude/skills`). Flags: `--agent`, `--all-agents`, `--skills`, `--all-skills`, `--global`, `--project`.
   - `somnio skills update` — refreshes only the skills that are actually installed, overwriting them with the latest version. Checks BOTH global and project locations for every agent and updates whichever exist.
-  - `somnio skills remove` (alias `uninstall`) — deletes installed skills, asking global or project, and only ever removes skills the CLI itself installed.
+  - `somnio skills remove` (alias `uninstall`) — clears a whole scope: asks global, project or both, then removes every skill the CLI installed there. There is no per-skill selection, and skills the CLI did not install are never touched. Flags: `--agent`, `--global`, `--project`, `--force`.
 - **Install manifest** (`.somnio-skills.json`): each agent install directory now records the exact paths somnio wrote, per skill. This is what lets `skills update` and `skills remove` act only on CLI-installed content instead of guessing by name — hand-authored skills sharing a name are never touched.
 - **Per-project skill installs**: `AgentConfig` gained `supportsProjectScope`, `resolvedScopedInstallPath` and `resolvedScopedExecutionRulesPath`, re-anchoring the `{home}` placeholder at the project root.
 

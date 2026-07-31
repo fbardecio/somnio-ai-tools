@@ -550,12 +550,16 @@ typedef _RemoveCandidate = ({
 
 /// `somnio skills remove` (alias: `somnio skills uninstall`).
 ///
+/// Clears a whole scope rather than individual skills: the only choice is
+/// global, project, or both, and everything somnio installed there is
+/// removed. Picking skills one by one is what `install` is for — remove is
+/// the "clean this location out" operation.
+///
 /// SAFETY GUARANTEE: only skills recorded in a location's
-/// `.somnio-skills.json` manifest are ever considered for deletion. A
-/// skill directory the user wrote by hand, or one a different tool
-/// installed, never appears in that manifest and therefore can never be
-/// picked, selected, or removed by this command — no matter what name or
-/// flag is passed.
+/// `.somnio-skills.json` manifest are ever deleted. A skill directory the
+/// user wrote by hand, or one a different tool installed, never appears in
+/// that manifest and therefore can never be removed by this command — no
+/// matter what flags are passed.
 class _SkillsRemoveCommand extends Command<int> {
   _SkillsRemoveCommand({required Logger logger}) : _logger = logger {
     argParser
@@ -565,26 +569,15 @@ class _SkillsRemoveCommand extends Command<int> {
         help: 'Limit removal to a single agent.',
         allowed: AgentRegistry.installableAgents.map((a) => a.id).toList(),
       )
-      ..addOption(
-        'skills',
-        abbr: 's',
-        help: 'Comma-separated skill names to remove.',
-      )
-      ..addFlag(
-        'all-skills',
-        help: 'Remove every somnio-installed skill in the selected scope.',
-      )
       ..addFlag(
         'global',
         abbr: 'g',
-        help: 'Only consider the global install. Mutually exclusive with '
-            '--project.',
+        help: 'Remove the global install. Mutually exclusive with --project.',
       )
       ..addFlag(
         'project',
         abbr: 'p',
-        help: 'Only consider the project install. Mutually exclusive with '
-            '--global.',
+        help: 'Remove the project install. Mutually exclusive with --global.',
       )
       ..addFlag(
         'force',
@@ -611,15 +604,18 @@ class _SkillsRemoveCommand extends Command<int> {
 
   @override
   String get description =>
-      'Remove installed Somnio skills. Only skills recorded in the '
-      '.somnio-skills.json manifest — i.e. skills this CLI itself '
-      'installed — are ever candidates for deletion; hand-authored '
+      'Remove every Somnio skill from a scope. Asks whether to clear the '
+      'global install, the project install, or both, then removes all of '
+      'them — there is no per-skill selection.\n'
+      '\n'
+      'Only skills recorded in the .somnio-skills.json manifest — i.e. '
+      'skills this CLI itself installed — are ever deleted; hand-authored '
       'skills are never touched.\n'
       '\n'
       'Examples:\n'
-      '  somnio skills remove                                     # interactive\n'
-      '  somnio skills remove --agent claude --all-skills --global\n'
-      '  somnio skills remove --skills flutter-health-audit --force';
+      '  somnio skills remove                    # asks global / project / both\n'
+      '  somnio skills remove --global --force\n'
+      '  somnio skills remove --agent claude --project';
 
   @override
   Future<int> run() async {
@@ -632,8 +628,6 @@ class _SkillsRemoveCommand extends Command<int> {
     }
 
     final agentId = argResults!['agent'] as String?;
-    final allSkills = argResults!['all-skills'] as bool;
-    final skillsCsv = argResults!['skills'] as String?;
     final force = argResults!['force'] as bool;
     _verbose = argResults!['verbose'] as bool;
 
@@ -645,8 +639,13 @@ class _SkillsRemoveCommand extends Command<int> {
     } else if (Prompts.isInteractive) {
       scopes = _promptForScopes();
     } else {
-      // No terminal to ask on: consider both rather than guess wrong.
-      scopes = [InstallScope.global, InstallScope.project];
+      // No terminal to ask on. This command wipes a whole scope, so guessing
+      // is not an option — demand an explicit scope instead of defaulting to
+      // both and deleting more than the caller meant.
+      _logger.err(
+        'Specify --global or --project when running non-interactively.',
+      );
+      return ExitCode.usage.code;
     }
 
     List<AgentConfig> agents;
@@ -668,16 +667,19 @@ class _SkillsRemoveCommand extends Command<int> {
       return ExitCode.success.code;
     }
 
-    final selected = _resolveSelection(candidates, allSkills, skillsCsv);
-    if (selected == null) return ExitCode.usage.code;
-    if (selected.isEmpty) {
-      _logger.info('No skills selected.');
-      return ExitCode.success.code;
+    // Everything found in the selected scope goes — the user picked a scope
+    // to clear, not a list of skills. Listing them first keeps that from
+    // being a blind destructive step.
+    _logger.info('');
+    _logger.info('The following skills will be removed:');
+    for (final candidate in candidates) {
+      _logger.info('  ${_candidateLabel(candidate)}');
     }
+    _logger.info('');
 
     if (!force) {
       final confirmed = _logger.confirm(
-        'Remove ${selected.length} skill(s)?',
+        'Remove all ${candidates.length} skill(s)?',
         defaultValue: false,
       );
       if (!confirmed) {
@@ -686,10 +688,10 @@ class _SkillsRemoveCommand extends Command<int> {
       }
     }
 
-    _removeAll(selected);
+    _removeAll(candidates);
 
     _logger.info('');
-    _logger.success('Removed ${selected.length} skill(s).');
+    _logger.success('Removed ${candidates.length} skill(s).');
     return ExitCode.success.code;
   }
 
@@ -727,62 +729,6 @@ class _SkillsRemoveCommand extends Command<int> {
     }
 
     return candidates;
-  }
-
-  /// Resolves which of [candidates] to remove, or `null` on a usage error.
-  List<_RemoveCandidate>? _resolveSelection(
-    List<_RemoveCandidate> candidates,
-    bool allSkills,
-    String? skillsCsv,
-  ) {
-    if (allSkills) {
-      return candidates;
-    }
-
-    if (skillsCsv != null) {
-      final names = skillsCsv
-          .split(',')
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .toSet();
-
-      final selected = <_RemoveCandidate>[];
-      final unknown = <String>[];
-      for (final name in names) {
-        final matches = candidates.where((c) => c.entry.skill == name);
-        if (matches.isEmpty) {
-          unknown.add(name);
-        } else {
-          selected.addAll(matches);
-        }
-      }
-
-      if (unknown.isNotEmpty) {
-        _logger.err('Unknown skill(s): ${unknown.join(', ')}');
-        _logger.info('');
-        _logger.info('Installed skills:');
-        for (final c in candidates) {
-          _logger.info('  ${_candidateLabel(c)}');
-        }
-        return null;
-      }
-
-      return selected;
-    }
-
-    if (Prompts.isInteractive) {
-      final options = candidates.map(_candidateLabel).toList();
-      final defaults = List<bool>.filled(options.length, false);
-      final indexes = Prompts.selectMany(
-        prompt: 'Select skills to remove',
-        options: options,
-        defaults: defaults,
-      );
-      return indexes.map((i) => candidates[i]).toList();
-    }
-
-    _logger.err('Specify --skills <name> or --all-skills.');
-    return null;
   }
 
   String _candidateLabel(_RemoveCandidate c) =>
