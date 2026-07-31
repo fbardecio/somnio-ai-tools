@@ -202,6 +202,7 @@ See the [Workflow Guide](workflows.md) for details.
 | `python-best-practices` | `pp`, `somnio-pp` | Python code quality check |
 | `angular-best-practices` | `ap`, `somnio-ap` | Angular (2+) code quality check |
 | `security-audit` | `sa`, `somnio-sa` | Security audit (any stack, 11 steps) |
+| `iso27001-audit` | `iso`, `somnio-iso` | ISO 27001:2022 readiness audit (any stack, whole project) |
 
 See the [Skills Catalog](skills.md) for full descriptions.
 
