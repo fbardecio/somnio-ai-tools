@@ -131,10 +131,11 @@ This shows installed skills across all detected agents.
 ## Updating
 
 ```bash
-somnio update
+somnio update         # Update the CLI binary
+somnio skills update  # Refresh installed skills (global and project)
 ```
 
-Updates the CLI to the latest version and reinstalls all skills.
+`somnio update` updates the CLI only. Skills have their own lifecycle — `somnio skills update` refreshes the ones you already have installed, checking both the global and project locations.
 
 ## Uninstalling
 

@@ -31,9 +31,10 @@ somnio -q status      # Quiet mode (suppress banner)
 | `somnio hooks` | Install Claude Code hooks (e.g. the work-log Stop hook) |
 | `somnio run <name-or-alias>` | Execute a multi-step audit from the target project directory |
 | `somnio install` | Install skills to a specific agent or all agents |
+| `somnio skills` | Install, update, or remove skills — globally or per project |
 | `somnio add <tech>` | Add a new technology's audit skills (scaffolds + registers) |
 | `somnio status` | Show installed skills across all agents |
-| `somnio update` | Update CLI and reinstall skills |
+| `somnio update` | Update the CLI binary only (skills are managed by `somnio skills`) |
 | `somnio uninstall` | Remove all Somnio skills from all agents |
 | `somnio rules` | Install coding-standard rules for all detected agents |
 | `somnio workflow` | Create, configure, and run custom workflows |
@@ -124,20 +125,82 @@ somnio add flutter     # Auto-detect existing skills/flutter-* bundles
 
 Two modes: **wizard** (when `skills/{tech}-*` does not exist, scaffolds new skill directories) and **auto-detect** (when `skills/{tech}-*` exists, scans and registers valid bundles).
 
-### somnio update
+### somnio skills
 
-Update the CLI to the latest version and reinstall all skills across all agents.
+Manage the lifecycle of installed skills. Skills are versioned independently of the CLI binary, so this group owns installing, refreshing, and removing them.
+
+Every skill the CLI writes is recorded in a `.somnio-skills.json` manifest at the root of the agent's install directory (one per agent and scope). `update` and `remove` act only on what that manifest lists — a skill you authored by hand is never touched, even if it shares a name with a shipped one.
+
+**Scopes.** A skill can live in the agent's config directory (`--global`, e.g. `~/.claude/skills`) or inside the current project (`--project`, e.g. `./.claude/skills`).
+
+#### somnio skills install
+
+Choose which skills to install and where. Prompts interactively for agents, skills, and scope when no flags are given.
 
 ```bash
-somnio update             # Update CLI + reinstall skills via skills.sh
-somnio update --verbose   # Show each removed file and npx output
-somnio update --legacy    # Use built-in installer instead of skills.sh
+somnio skills install                                        # interactive
+somnio skills install --agent claude --all-skills --global
+somnio skills install --all-agents --project --skills flutter_health,security_audit
 ```
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--legacy` | | Use built-in installer instead of skills.sh |
-| `--verbose` | `-v` | Show detailed output (removed files, npx stdout) |
+| `--agent` | `-a` | Target a single agent |
+| `--all-agents` | | Install to every agent detected on this machine |
+| `--skills` | `-s` | Comma-separated skill ids/names (skips the wizard) |
+| `--all-skills` | | Install every skill without prompting |
+| `--global` | `-g` | Install into the agent's config dir. Mutually exclusive with `--project` |
+| `--project` | `-p` | Install into the current project directory |
+
+#### somnio skills update
+
+Refresh already-installed skills in place, overwriting them with the shipped version. It checks **both** the global and project locations for every agent and refreshes whichever exist — it never asks for a scope and never installs anything new.
+
+```bash
+somnio skills update                # refresh everything installed
+somnio skills update --agent claude # refresh only Claude Code
+somnio skills update --verbose
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--agent` | `-a` | Limit the refresh to a single agent |
+| `--verbose` | `-v` | Show the install directory for each refreshed location |
+
+#### somnio skills remove
+
+Clear a whole scope. Asks whether to remove the global install, the project install, or both, then deletes every somnio-installed skill there — there is no per-skill selection. Lists what will go and asks for confirmation first.
+
+Aliased as `somnio skills uninstall`.
+
+```bash
+somnio skills remove                    # asks global / project / both
+somnio skills remove --global --force
+somnio skills remove --agent claude --project
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--agent` | `-a` | Limit removal to a single agent |
+| `--global` | `-g` | Remove the global install. Mutually exclusive with `--project` |
+| `--project` | `-p` | Remove the project install |
+| `--force` | `-f` | Skip the confirmation prompt |
+| `--verbose` | `-v` | Show each removed path |
+
+> Running non-interactively requires an explicit `--global` or `--project` — the command clears an entire scope, so it will not guess.
+
+### somnio update
+
+Update the CLI binary to the latest version. It does **not** touch installed skills; use [`somnio skills update`](#somnio-skills-update) for that.
+
+```bash
+somnio update             # Update the CLI from git
+somnio update --verbose   # Show the raw output of the update process
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--verbose` | `-v` | Show the raw output of the update process |
 
 ### somnio uninstall
 

@@ -75,7 +75,9 @@ cli/lib/src/
 | `workflow` | Gemini/Antigravity | Workflow YAML format |
 | `markdown` | Generic | Standard markdown |
 
-**Installers** — Write transformed skills to agent-specific locations (`~/.claude/skills/`, `~/.cursor/commands/`, etc.).
+**Installers** — Write transformed skills to agent-specific locations (`~/.claude/skills/`, `~/.cursor/commands/`, etc.). `AgentInstaller` resolves its target through `InstallScope`: `global` anchors the path template's `{home}` placeholder at the user's home directory, `project` anchors it at the current project root (`./.claude/skills/`). Only agents whose `installPath` is home-relative expose a project scope (`AgentConfig.supportsProjectScope`).
+
+**Skill Manifest** (`installers/skill_manifest.dart`) — Every install writes a `.somnio-skills.json` at the root of the target directory, recording the exact relative paths written per skill (tagged by which root they belong to — the install dir or the agent's separate `executionRulesPath`). One manifest per agent and scope. This is what makes `somnio skills update` and `somnio skills remove` exact: they act only on recorded paths instead of guessing ownership by matching names against the registry, so user-authored skills sharing a name are never modified or deleted. A missing or corrupt manifest reads as empty rather than throwing, so a bad file can't wedge the install commands.
 
 **Command Installer** (`installers/command_installer.dart`) — Writes commands at folder scope (no transformer needed; commands are distributed as-is to `.claude/commands/` and `.cursor/commands/`). Backed by `somnio commands install`.
 
