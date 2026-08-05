@@ -51,6 +51,9 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import troubleshooting  # noqa: E402  (sibling module, loaded by path so the script stays runnable from anywhere)
+
 API_ROOT = "https://api.github.com"
 
 
@@ -217,6 +220,72 @@ def get_merged_prs_between(session: requests.Session, repo: str, branch: str, st
 
 
 VALID_DEPLOY_SOURCES = ("release", "tag")
+
+
+# --- Issue model -----------------------------------------------------------
+# Every problem the script reports is an "issue" with a stable code. The code is
+# what links it to its remediation steps in references/troubleshooting.md, so
+# the steps travel inside the report instead of being matched by text at render
+# time. "impact" describes whether the MEASUREMENT succeeded, never whether a
+# number is good: blocked = nothing measurable at that level, partial = measured
+# with a declared gap, none = a factual note with nothing to fix.
+ISSUE_IMPACTS = ("blocked", "partial", "none")
+
+ISSUE_CODES = (
+    "no_credential",
+    "repo_unreachable",
+    "token_unauthorized",
+    "rate_limited",
+    "branch_not_found",
+    "no_markers_at_all",
+    "no_markers_matching_pattern",
+    "deploy_source_mismatch",
+    "matching_releases_all_draft",
+    "no_markers_in_window",
+    "first_marker_no_prior",
+    "no_prs_in_range",
+    "pr_first_commit_unfetchable",
+    "github_api_error",
+)
+
+# Codes with no entry in troubleshooting.md, on purpose. github_api_error is a
+# catch-all for unexpected API failures: there is no fixed remediation, so the
+# report shows the raw message. Kept as an explicit list so the drift test can
+# tell "deliberate exception" from "someone forgot to document a code".
+NO_GUIDANCE_CODES = ("github_api_error",)
+
+
+def make_issue(code: str, impact: str, message: str, evidence: dict = None) -> dict:
+    """Builds one issue. `guidance` is filled in later by hydrate_issues, never
+    here — the script must never carry remediation prose of its own."""
+    if code not in ISSUE_CODES:
+        raise ValueError(f"unknown issue code '{code}' (add it to ISSUE_CODES and to references/troubleshooting.md).")
+    if impact not in ISSUE_IMPACTS:
+        raise ValueError(f"unknown impact '{impact}' (valid: {', '.join(ISSUE_IMPACTS)}).")
+    return {"code": code, "impact": impact, "message": message, "evidence": evidence or {}, "guidance": None}
+
+
+def iter_issues(result: dict):
+    """Yields every issue in the result: root-level ones (global problems, not
+    tied to a repo) and each repo's."""
+    for issue in result.get("issues", []):
+        yield issue
+    for project in result.get("projects", []):
+        for repo in project.get("repos", []):
+            for issue in repo.get("issues", []):
+                yield issue
+
+
+def hydrate_issues(result: dict, guidance: dict) -> None:
+    """Attaches the What / How to check / Where to fix steps to each issue, in
+    place. A code with no entry keeps guidance=None and the renderer says so
+    explicitly — it never invents steps."""
+    for issue in iter_issues(result):
+        issue["guidance"] = guidance.get(issue["code"])
+
+
+def has_blocked(result: dict) -> bool:
+    return any(i["impact"] == "blocked" for i in iter_issues(result))
 
 
 def compute_repo_metrics(session: requests.Session, repo: str, branch: str,

@@ -266,5 +266,66 @@ class TestFormatHumanSummary(unittest.TestCase):
         self.assertIn("404 Not Found", text)
 
 
+class TestIssueModel(unittest.TestCase):
+    def test_make_issue_shape(self):
+        i = dora_metrics.make_issue("branch_not_found", "partial", "msg", evidence={"prod_branch": "main"})
+        self.assertEqual(i["code"], "branch_not_found")
+        self.assertEqual(i["impact"], "partial")
+        self.assertEqual(i["message"], "msg")
+        self.assertEqual(i["evidence"], {"prod_branch": "main"})
+        self.assertIsNone(i["guidance"])  # hydrated later, never at construction
+
+    def test_make_issue_rejects_unknown_code(self):
+        with self.assertRaises(ValueError):
+            dora_metrics.make_issue("not_a_real_code", "partial", "msg")
+
+    def test_make_issue_rejects_unknown_impact(self):
+        with self.assertRaises(ValueError):
+            dora_metrics.make_issue("branch_not_found", "critical", "msg")
+
+    def test_hydrate_fills_root_and_repo_issues(self):
+        result = {
+            "issues": [dora_metrics.make_issue("no_credential", "blocked", "m")],
+            "projects": [{"name": "P", "repos": [
+                {"repo": "a/b", "issues": [dora_metrics.make_issue("branch_not_found", "partial", "m")]},
+            ]}],
+        }
+        guidance = {"no_credential": {"what": "w1", "how_to_check": "h1", "where_to_fix": "f1"},
+                    "branch_not_found": {"what": "w2", "how_to_check": "h2", "where_to_fix": "f2"}}
+        dora_metrics.hydrate_issues(result, guidance)
+        self.assertEqual(result["issues"][0]["guidance"]["what"], "w1")
+        self.assertEqual(result["projects"][0]["repos"][0]["issues"][0]["guidance"]["what"], "w2")
+
+    def test_hydrate_leaves_guidance_none_when_code_absent(self):
+        result = {"issues": [dora_metrics.make_issue("github_api_error", "blocked", "m")], "projects": []}
+        dora_metrics.hydrate_issues(result, {})
+        self.assertIsNone(result["issues"][0]["guidance"])
+
+    def test_has_blocked(self):
+        blocked = {"issues": [], "projects": [{"name": "P", "repos": [
+            {"repo": "a/b", "issues": [dora_metrics.make_issue("repo_unreachable", "blocked", "m")]}]}]}
+        partial = {"issues": [], "projects": [{"name": "P", "repos": [
+            {"repo": "a/b", "issues": [dora_metrics.make_issue("branch_not_found", "partial", "m")]}]}]}
+        self.assertTrue(dora_metrics.has_blocked(blocked))
+        self.assertFalse(dora_metrics.has_blocked(partial))
+
+
+class TestGuidanceDrift(unittest.TestCase):
+    """Every code the script emits must have an entry in troubleshooting.md and
+    vice versa. Without this the single source of truth drifts silently and
+    reports start showing problems with no steps."""
+
+    def test_codes_and_entries_match(self):
+        import importlib.util as _ilu
+        path = os.path.join(os.path.dirname(__file__), "..", "scripts", "troubleshooting.py")
+        spec = _ilu.spec_from_file_location("troubleshooting", path)
+        troubleshooting = _ilu.module_from_spec(spec)
+        spec.loader.exec_module(troubleshooting)
+
+        documented = set(troubleshooting.load_guidance(troubleshooting.default_path()))
+        expected = set(dora_metrics.ISSUE_CODES) - set(dora_metrics.NO_GUIDANCE_CODES)
+        self.assertEqual(documented, expected)
+
+
 if __name__ == "__main__":
     unittest.main()
