@@ -214,6 +214,39 @@ class TestComputeRepoMetrics(unittest.TestCase):
         self.assertEqual(r["deploy_source"], "tag")
         self.assertTrue(any(w.startswith("Tag ") for w in r["warnings"]))
 
+    def test_warnings_are_derived_from_issues_with_identical_text(self):
+        releases = self._releases([("v1.0.0", "2026-07-01T00:00:00Z")])
+        with patch.object(dora_metrics, "get_prod_releases", return_value=releases):
+            r = dora_metrics.compute_repo_metrics(
+                session=None, repo="a/b", branch="main", tag_pattern=r"^v",
+                window_days=14, now=dt("2026-07-03T00:00:00Z"),
+            )
+        self.assertEqual([i["code"] for i in r["issues"]], ["first_marker_no_prior"])
+        self.assertEqual(r["warnings"], [i["message"] for i in r["issues"]])
+
+    def test_marker_totals_are_reported_for_later_diagnosis(self):
+        releases = self._releases([
+            ("v1.0.0", "2026-05-01T00:00:00Z"),   # outside the window
+            ("v1.1.0", "2026-07-01T00:00:00Z"),
+        ])
+        with patch.object(dora_metrics, "get_prod_releases", return_value=releases), \
+             patch.object(dora_metrics, "get_merged_prs_between", return_value=[]):
+            r = dora_metrics.compute_repo_metrics(
+                session=None, repo="a/b", branch="main", tag_pattern=r"^v",
+                window_days=14, now=dt("2026-07-03T00:00:00Z"),
+            )
+        self.assertEqual(r["markers_total"], 2)
+        self.assertEqual(r["latest_marker_at"], "2026-07-01T00:00:00Z")
+
+    def test_no_markers_at_all_reports_zero_totals(self):
+        with patch.object(dora_metrics, "get_prod_releases", return_value=[]):
+            r = dora_metrics.compute_repo_metrics(
+                session=None, repo="a/b", branch="main", tag_pattern=r"^v",
+                window_days=14, now=dt("2026-07-03T00:00:00Z"),
+            )
+        self.assertEqual(r["markers_total"], 0)
+        self.assertIsNone(r["latest_marker_at"])
+
 
 class TestFormatHumanSummary(unittest.TestCase):
     def test_includes_metrics_and_warnings(self):

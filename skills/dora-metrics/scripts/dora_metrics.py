@@ -291,7 +291,7 @@ def has_blocked(result: dict) -> bool:
 def compute_repo_metrics(session: requests.Session, repo: str, branch: str,
                           tag_pattern: str, window_days: int, now: datetime,
                           deploy_source: str = "release"):
-    warnings = []
+    issues = []
     window_start = now - timedelta(days=window_days)
 
     if deploy_source == "tag":
@@ -313,20 +313,30 @@ def compute_repo_metrics(session: requests.Session, repo: str, branch: str,
     for dep in deploys_in_window:
         idx = tag_to_idx[dep["tag"]]
         if idx == 0:
-            warnings.append(
+            issues.append(make_issue(
+                "first_marker_no_prior", "partial",
                 f"{marker_label} {dep['tag']} has no known prior {marker_label.lower()} — "
-                "the PR population can't be bounded, it's excluded from the Lead Time."
-            )
+                "the PR population can't be bounded, it's excluded from the Lead Time.",
+                evidence={"tag": dep["tag"], "deploy_source": deploy_source},
+            ))
             continue
         prev_dep = all_deploys[idx - 1]
         prs = get_merged_prs_between(session, repo, branch, prev_dep["published_at"], dep["published_at"])
         if not prs:
-            warnings.append(f"{marker_label} {dep['tag']}: 0 merged PRs found in the range — check the base branch/convention.")
+            issues.append(make_issue(
+                "no_prs_in_range", "partial",
+                f"{marker_label} {dep['tag']}: 0 merged PRs found in the range — check the base branch/convention.",
+                evidence={"tag": dep["tag"], "prev_tag": prev_dep["tag"], "prod_branch": branch},
+            ))
             continue
         for pr in prs:
             first_commit_ts = get_pr_first_commit_ts(session, repo, pr["number"])
             if first_commit_ts is None:
-                warnings.append(f"PR #{pr['number']}: could not fetch the first commit, it's excluded.")
+                issues.append(make_issue(
+                    "pr_first_commit_unfetchable", "partial",
+                    f"PR #{pr['number']}: could not fetch the first commit, it's excluded.",
+                    evidence={"pr": pr["number"], "tag": dep["tag"]},
+                ))
                 continue
             lead_time_h = (dep["published_at"] - first_commit_ts).total_seconds() / 3600
             lead_times_hours.append(lead_time_h)
@@ -356,7 +366,12 @@ def compute_repo_metrics(session: requests.Session, repo: str, branch: str,
         "lead_time_median_hours": lead_time_median_hours,
         "lead_time_n": len(lead_times_hours),
         "lead_time_detail": lt_detail,
-        "warnings": warnings,
+        "markers_total": len(all_deploys),
+        "latest_marker_at": fmt_ts(all_deploys[-1]["published_at"]) if all_deploys else None,
+        "issues": issues,
+        # Derived, kept for consumers that read the raw strings (the E2E suite
+        # asserts on them). Issues with impact "none" are notes, not warnings.
+        "warnings": [i["message"] for i in issues if i["impact"] != "none"],
     }
 
 
