@@ -130,13 +130,6 @@ without re-parsing the JSON):
 
 - **Deployment Frequency** (window 14d): 2
 - **Median Lead Time**: 4.3h (n=3)
-
-**Notes**:
-
-- `example-org/example-frontend: 0 deploys in the window. 4 deploy marker(s)
-  exist in history, the most recent on 2026-06-02T10:00:00Z.`
-  - **What:** This is a fact about the window, not a setup problem.
-  - **Where to fix:** Nothing to fix.
 ```
 
 Portable JSON (if `--out-dir` is used), one repo inside `projects[].repos[]`:
@@ -159,15 +152,7 @@ Portable JSON (if `--out-dir` is used), one repo inside `projects[].repos[]`:
   ],
   "measured": true,
   "warnings": [],
-  "issues": [
-    {
-      "code": "no_markers_in_window",
-      "impact": "none",
-      "message": "example-org/example-frontend: 0 deploys in the window. 4 deploy marker(s) exist in history, the most recent on 2026-06-02T10:00:00Z.",
-      "evidence": {"markers_total": 4, "latest_marker_at": "2026-06-02T10:00:00Z"},
-      "guidance": {"what": "...", "how_to_check": "...", "where_to_fix": "..."}
-    }
-  ]
+  "issues": []
 }
 ```
 
@@ -180,6 +165,40 @@ repo with no deploy markers, markers that don't match `tag_pattern`, a
 `deploy_source` pointing at the wrong kind of marker, matching Releases left as
 drafts. Running with no credential at all still produces a report — the one
 listing that problem — instead of dying on stderr.
+
+A repo that could not be measured comes back with `measured: false`, no metric
+fields, and the problem with its steps already attached:
+
+```json
+{
+  "repo": "example-org/example-frontend",
+  "prod_branch": "main",
+  "deploy_source": "release",
+  "type": ["web", "mobile"],
+  "measured": false,
+  "warnings": [
+    "example-org/example-frontend: the GitHub API returned 404 — the repo is unreachable with this credential, it could not be measured."
+  ],
+  "issues": [
+    {
+      "code": "repo_unreachable",
+      "impact": "blocked",
+      "message": "example-org/example-frontend: the GitHub API returned 404 — the repo is unreachable with this credential, it could not be measured.",
+      "evidence": {"status": 404},
+      "guidance": {
+        "what": "GET /repos/{owner}/{repo} returned 404 or 403, so the script cannot read anything about this repo and skipped it. ...",
+        "how_to_check": "- Confirm the `repo` value in `config/projects.json` is the current `org/repo` ...",
+        "where_to_fix": "- Wrong path: correct `repos[].repo` in `config/projects.json`. ..."
+      }
+    }
+  ]
+}
+```
+
+A repo that *was* measured but hit a gap keeps its numbers and lists the gap
+alongside them, with `impact: "partial"`. A factual note that explains a number
+rather than reporting a problem — such as a window with no deploy markers in it
+— carries `impact: "none"` and renders under **Notes** instead.
 
 The steps live in `references/troubleshooting.md`, one anchored entry per
 problem code. That file is the single source of truth: the script parses it
