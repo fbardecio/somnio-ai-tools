@@ -536,8 +536,21 @@ def _render_issue(issue: dict, lines: list) -> None:
         text = (guidance.get(key) or "").strip()
         if not text:
             continue
-        body = " ".join(text.split())
-        lines.append(f"  - **{label}:** {body}")
+        _render_guidance_body(label, text, lines)
+
+
+def _render_guidance_body(label: str, text: str, lines: list) -> None:
+    """Guidance is authored as markdown: some fields are a paragraph, others a
+    bullet list. A paragraph reads better collapsed onto the label's line; a
+    list must keep its line breaks or the bullets run together into one
+    sentence. Nested one level under the issue so it stays inside it."""
+    raw = text.split("\n")
+    if not any(ln.lstrip().startswith("- ") for ln in raw):
+        lines.append(f"  - **{label}:** {' '.join(text.split())}")
+        return
+    lines.append(f"  - **{label}:**")
+    for ln in raw:
+        lines.append(f"    {ln.strip()}" if ln.strip() else "")
 
 
 def _render_issue_groups(issues: list, lines: list) -> None:

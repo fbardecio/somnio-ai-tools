@@ -288,6 +288,21 @@ class TestFormatHumanSummary(unittest.TestCase):
         self.assertIn("**How to check:** Compare with the repo's branch list.", text)
         self.assertIn("**Where to fix:** Correct prod_branch in config/projects.json.", text)
 
+    def test_bullet_list_guidance_keeps_one_bullet_per_line(self):
+        issue = dora_metrics.make_issue("no_credential", "blocked", "No GitHub credential found.")
+        issue["guidance"] = {
+            "what": "The script found no credential.",
+            "how_to_check": "",
+            "where_to_fix": "- Option 1: export GITHUB_TOKEN=ghp_xxxx with a token that has\n  repo read scope.\n- Option 2: run `gh auth login` once.",
+        }
+        text = dora_metrics.format_human_summary(
+            {"issues": [issue], "projects": []}, window_days=14)
+        self.assertIn("  - **Where to fix:**\n", text)
+        self.assertIn("    - Option 1: export GITHUB_TOKEN=ghp_xxxx with a token that has", text)
+        self.assertIn("    - Option 2: run `gh auth login` once.", text)
+        # Prose fields still collapse onto the label's line.
+        self.assertIn("  - **What:** The script found no credential.", text)
+
     def test_issue_without_guidance_says_so_instead_of_inventing(self):
         issue = dora_metrics.make_issue("github_api_error", "blocked", "a/b: GitHub API error 500")
         text = dora_metrics.format_human_summary(
