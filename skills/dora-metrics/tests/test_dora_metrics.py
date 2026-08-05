@@ -614,6 +614,38 @@ class TestBuildResult(unittest.TestCase):
                 now=dt("2026-07-03T00:00:00Z"))
         self.assertEqual([i["code"] for i in result["projects"][0]["repos"][0]["issues"]], ["github_api_error"])
 
+    def test_repo_name_containing_401_is_not_mistaken_for_an_auth_failure(self):
+        projects = [{"name": "P", "repos": [{"repo": "org/app-401", "prod_branch": "main"}]}]
+        boom = dora_metrics.GitHubError(
+            "GitHub API error 500 at https://api.github.com/repos/org/app-401/releases: boom")
+        with patch.object(dora_metrics, "preflight_repo", return_value=[]), \
+             patch.object(dora_metrics, "compute_repo_metrics", side_effect=boom):
+            result = dora_metrics.build_result(
+                session=None, projects=projects, tag_pattern=r"^v", window_days=14,
+                now=dt("2026-07-03T00:00:00Z"))
+        self.assertEqual([i["code"] for i in result["projects"][0]["repos"][0]["issues"]], ["github_api_error"])
+
+    def test_repo_name_containing_404_is_not_mistaken_for_an_unreachable_repo(self):
+        projects = [{"name": "P", "repos": [{"repo": "org/404-redirects", "prod_branch": "main"}]}]
+        boom = dora_metrics.GitHubError(
+            "GitHub API error 500 at https://api.github.com/repos/org/404-redirects/tags: boom")
+        with patch.object(dora_metrics, "preflight_repo", return_value=[]), \
+             patch.object(dora_metrics, "compute_repo_metrics", side_effect=boom):
+            result = dora_metrics.build_result(
+                session=None, projects=projects, tag_pattern=r"^v", window_days=14,
+                now=dt("2026-07-03T00:00:00Z"))
+        self.assertEqual([i["code"] for i in result["projects"][0]["repos"][0]["issues"]], ["github_api_error"])
+
+    def test_rate_limit_message_still_classified(self):
+        projects = [{"name": "P", "repos": [{"repo": "a/b", "prod_branch": "main"}]}]
+        boom = dora_metrics.GitHubError("Rate limit reached: API rate limit exceeded for user")
+        with patch.object(dora_metrics, "preflight_repo", return_value=[]), \
+             patch.object(dora_metrics, "compute_repo_metrics", side_effect=boom):
+            result = dora_metrics.build_result(
+                session=None, projects=projects, tag_pattern=r"^v", window_days=14,
+                now=dt("2026-07-03T00:00:00Z"))
+        self.assertEqual([i["code"] for i in result["projects"][0]["repos"][0]["issues"]], ["rate_limited"])
+
     def test_one_blocked_repo_does_not_stop_the_next(self):
         projects = [{"name": "P", "repos": [{"repo": "a/b", "prod_branch": "main"},
                                              {"repo": "a/c", "prod_branch": "main"}]}]

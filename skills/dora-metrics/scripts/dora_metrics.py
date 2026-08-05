@@ -642,15 +642,20 @@ def validate_deploy_sources(projects) -> None:
 
 def classify_github_error(repo: str, message: str) -> dict:
     """Maps an exception raised mid-measurement onto a code, so an access
-    problem reaches the report with steps instead of as raw text."""
-    lowered = message.lower()
-    if "401" in message:
+    problem reaches the report with steps instead of as raw text.
+
+    Matches on the START of the message, never a substring search: the message
+    embeds the request URL (and, for the generic shape, GitHub's response body),
+    so a repo named `org/app-401` would otherwise be reported as an auth
+    failure and its owner sent to reissue a perfectly good token. The prefixes
+    below are the shapes gh_paginate raises."""
+    if message.startswith("401"):
         return make_issue("token_unauthorized", "blocked",
                           f"{repo}: 401 Unauthorized from the GitHub API — the credential is not valid for this repo.")
-    if "rate limit" in lowered:
+    if message.startswith("Rate limit reached"):
         return make_issue("rate_limited", "blocked",
                           f"{repo}: GitHub API rate limit reached — it could not be measured in this run.")
-    if "404" in message:
+    if message.startswith("404"):
         return make_issue("repo_unreachable", "blocked",
                           f"{repo}: the GitHub API returned 404 — the repo is unreachable with this credential, "
                           "it could not be measured.",
