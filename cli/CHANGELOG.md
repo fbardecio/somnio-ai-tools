@@ -5,6 +5,20 @@ All notable changes to the Somnio CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-08-05
+
+### Added
+
+- **`dora-metrics` diagnoses the setup it measures, and puts the fix steps in the report.** The skill could always say a repo deployed 0 times; it could not say whether that meant "no deploys" or "this repo is not instrumented the way `config/projects.json` claims". It now checks, per repo: whether the credential can see the repo at all, whether the configured `prod_branch` exists, whether the repo has any deploy markers, whether their names match `tag_pattern` (listing the real names it found as evidence), whether `deploy_source` points at the kind of marker the repo actually uses, and whether matching Releases were all left as drafts. Each finding carries the concrete remediation — which field of `config/projects.json` to change, which command to run — in the chat reply **and** in the saved `.md`, which previously listed the symptom with no way to act on it. Costs 2 extra REST calls per repo (`/repos`, `/branches/{branch}`), plus 2 more only when a repo produced no marker and the script needs evidence to explain why; these are REST, not the rate-limited Search API.
+- **Structured `issues` in the JSON output.** Every problem is now `{code, impact, message, evidence, guidance}`. `impact` describes whether the *measurement* succeeded — `blocked` (nothing measurable at that level), `partial` (measured, with a declared gap), `none` (a factual note, nothing to fix) — never whether a number is good or bad. Repos that could not be measured come back with `measured: false` and no metric fields instead of a bare `{"repo", "error"}` string; the run continues with the project's other repos. Root-level `issues` carry problems not tied to a repo. `warnings` survives as a derived list of the same message strings, so existing consumers keep working.
+- **`scripts/troubleshooting.py`**: parses `references/troubleshooting.md` by `<!-- code: X -->` anchor into `{code: {what, how_to_check, where_to_fix}}`. That markdown file stays the single source of truth for the prose — the script reads it and embeds the steps in its output, so editing it changes every future report. A unit test fails if `ISSUE_CODES` and the file's anchors drift apart, and a code with no entry renders an explicit "no guidance" line rather than inventing steps.
+
+### Changed
+
+- **`dora-metrics` no longer aborts when there is no GitHub credential.** It used to exit before producing anything, leaving the two fix options on stderr. It now generates the report carrying that problem and its steps, saves the `.json`/`.md` when `--out-dir` is passed, and exits 1. Exit code is 1 whenever any issue is `blocked` and 0 otherwise — a partially measured repo does not fail the run. Usage errors (an unknown `--project`, `--branch` without `--project`, an invalid `deploy_source`) keep their old behaviour: message on stderr, no report.
+- **The `report-writer` subagent no longer looks guidance up.** It used to match a warning's text against `references/troubleshooting.md` at render time, which left it free to improvise remediation and meant the chat reply and the saved file could disagree. The script now does the lookup before serializing, and the agent renders `issues[].guidance` verbatim from the JSON — the two outputs are the same by construction.
+- **`references/troubleshooting.md` restructured** into one anchored entry per problem code with `### What` / `### How to check` / `### Where to fix` subsections, so it is machine-readable. Entries for the new access and configuration problems were added; the existing warning entries kept their prose.
+
 ## [2.10.0] - 2026-07-31
 
 ### Added
