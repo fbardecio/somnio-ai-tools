@@ -249,54 +249,80 @@ class TestComputeRepoMetrics(unittest.TestCase):
 
 
 class TestFormatHumanSummary(unittest.TestCase):
-    def test_includes_metrics_and_warnings(self):
-        result = {
-            "projects": [{
-                "name": "Example Project",
-                "repos": [{
-                    "repo": "example-org/example-frontend",
-                    "type": ["web", "mobile"],
-                    "deploy_source": "release",
-                    "deployment_frequency": 2,
-                    "lead_time_median_hours": 4.3,
-                    "lead_time_n": 3,
-                    "warnings": ["some warning"],
-                }],
-            }],
-        }
-        text = dora_metrics.format_human_summary(result, window_days=14)
+    GUIDANCE = {"what": "The branch is missing.",
+                "how_to_check": "Compare with the repo's branch list.",
+                "where_to_fix": "Correct prod_branch in config/projects.json."}
+
+    def _repo(self, **kw):
+        base = {"repo": "example-org/example-frontend", "type": ["web", "mobile"],
+                "deploy_source": "release", "measured": True, "deployment_frequency": 2,
+                "lead_time_median_hours": 4.3, "lead_time_n": 3, "issues": [], "warnings": []}
+        base.update(kw)
+        return base
+
+    def _result(self, repos, root_issues=None):
+        return {"issues": root_issues or [], "projects": [{"name": "Example Project", "repos": repos}]}
+
+    def test_includes_metrics(self):
+        text = dora_metrics.format_human_summary(self._result([self._repo()]), window_days=14)
         self.assertIn("# DORA Metrics — Example Project", text)
         self.assertIn("## `example-org/example-frontend` (web, mobile) — deploy_source: release", text)
         self.assertIn("**Deployment Frequency** (window 14d): 2", text)
         self.assertIn("**Median Lead Time**: 4.3h (n=3)", text)
-        self.assertIn("**Warnings:**", text)
-        self.assertIn("- some warning", text)
+        self.assertNotIn("**Problems found", text)
 
     def test_no_lead_time_data(self):
-        result = {
-            "projects": [{
-                "name": "P",
-                "repos": [{
-                    "repo": "a/b", "type": [], "deploy_source": "release",
-                    "deployment_frequency": 0, "lead_time_median_hours": None,
-                    "lead_time_n": 0, "warnings": [],
-                }],
-            }],
-        }
-        text = dora_metrics.format_human_summary(result, window_days=14)
+        text = dora_metrics.format_human_summary(
+            self._result([self._repo(deployment_frequency=0, lead_time_median_hours=None, lead_time_n=0)]),
+            window_days=14)
         self.assertIn("no data in the window", text)
-        self.assertNotIn("**Warnings:**", text)
 
-    def test_repo_error_is_rendered(self):
-        result = {
-            "projects": [{
-                "name": "P",
-                "repos": [{"repo": "a/b", "error": "404 Not Found"}],
-            }],
-        }
-        text = dora_metrics.format_human_summary(result, window_days=14)
-        self.assertIn("## `a/b` — ERROR", text)
-        self.assertIn("404 Not Found", text)
+    def test_problem_renders_message_verbatim_then_the_steps(self):
+        issue = dora_metrics.make_issue("branch_not_found", "partial", "a/b: branch 'master' does not exist")
+        issue["guidance"] = self.GUIDANCE
+        text = dora_metrics.format_human_summary(
+            self._result([self._repo(issues=[issue], warnings=[issue["message"]])]), window_days=14)
+        self.assertIn("**Problems found and how to fix them:**", text)
+        self.assertIn("a/b: branch 'master' does not exist", text)
+        self.assertIn("**What:** The branch is missing.", text)
+        self.assertIn("**How to check:** Compare with the repo's branch list.", text)
+        self.assertIn("**Where to fix:** Correct prod_branch in config/projects.json.", text)
+
+    def test_issue_without_guidance_says_so_instead_of_inventing(self):
+        issue = dora_metrics.make_issue("github_api_error", "blocked", "a/b: GitHub API error 500")
+        text = dora_metrics.format_human_summary(
+            self._result([self._repo(measured=False, issues=[issue])]), window_days=14)
+        self.assertIn("a/b: GitHub API error 500", text)
+        self.assertIn("no guidance for 'github_api_error'", text)
+        self.assertNotIn("**What:**", text)
+
+    def test_impact_none_renders_under_notes_not_problems(self):
+        issue = dora_metrics.make_issue("no_markers_in_window", "none", "a/b: 0 deploys in the window.")
+        issue["guidance"] = {"what": "Nothing wrong.", "how_to_check": "", "where_to_fix": "Nothing to fix."}
+        text = dora_metrics.format_human_summary(
+            self._result([self._repo(deployment_frequency=0, issues=[issue])]), window_days=14)
+        self.assertIn("**Notes:**", text)
+        self.assertNotIn("**Problems found and how to fix them:**", text)
+        self.assertNotIn("**How to check:**", text)  # empty subsection is skipped, not rendered blank
+
+    def test_unmeasured_repo_shows_the_problem_and_no_metric_lines(self):
+        issue = dora_metrics.make_issue("repo_unreachable", "blocked", "a/b: the GitHub API returned 404")
+        issue["guidance"] = self.GUIDANCE
+        text = dora_metrics.format_human_summary(
+            self._result([{"repo": "a/b", "type": [], "deploy_source": "release",
+                           "measured": False, "issues": [issue], "warnings": [issue["message"]]}]),
+            window_days=14)
+        self.assertIn("## `a/b` — not measured", text)
+        self.assertNotIn("**Deployment Frequency**", text)
+        self.assertIn("a/b: the GitHub API returned 404", text)
+
+    def test_root_issue_renders_at_the_top(self):
+        issue = dora_metrics.make_issue("no_credential", "blocked", "No GitHub credential found.")
+        issue["guidance"] = self.GUIDANCE
+        text = dora_metrics.format_human_summary({"issues": [issue], "projects": []}, window_days=14)
+        self.assertTrue(text.startswith("# DORA Metrics"))
+        self.assertIn("No GitHub credential found.", text)
+        self.assertIn("**Problems found and how to fix them:**", text)
 
 
 class TestIssueModel(unittest.TestCase):

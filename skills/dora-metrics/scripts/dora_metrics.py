@@ -520,23 +520,68 @@ def compute_repo_metrics(session: requests.Session, repo: str, branch: str,
     }
 
 
+GUIDANCE_LABELS = (("what", "What"), ("how_to_check", "How to check"), ("where_to_fix", "Where to fix"))
+
+
+def _render_issue(issue: dict, lines: list) -> None:
+    """One issue: the raw message first, exactly as produced, then its steps.
+    The message is never rewritten — an issue with no guidance says so out loud
+    rather than getting invented steps."""
+    lines.append(f"- {issue['message']}")
+    guidance = issue.get("guidance")
+    if not guidance:
+        lines.append(f"  - _(no guidance for '{issue['code']}' in references/troubleshooting.md)_")
+        return
+    for key, label in GUIDANCE_LABELS:
+        text = (guidance.get(key) or "").strip()
+        if not text:
+            continue
+        body = " ".join(text.split())
+        lines.append(f"  - **{label}:** {body}")
+
+
+def _render_issue_groups(issues: list, lines: list) -> None:
+    """Problems (blocked/partial) and notes (impact none) are separated on
+    purpose: a note explains a number, it is not something to fix."""
+    problems = [i for i in issues if i["impact"] != "none"]
+    notes = [i for i in issues if i["impact"] == "none"]
+    if problems:
+        lines.append("**Problems found and how to fix them:**")
+        lines.append("")
+        for issue in problems:
+            _render_issue(issue, lines)
+        lines.append("")
+    if notes:
+        lines.append("**Notes:**")
+        lines.append("")
+        for issue in notes:
+            _render_issue(issue, lines)
+        lines.append("")
+
+
 def format_human_summary(result: dict, window_days: int) -> str:
     """Renders the fetched data as a readable Markdown report — the same
-    numbers printed to stdout, formatted so a saved file is easy to open and
-    read on its own. Pure formatting: no interpretation, no ranking, no
-    number that isn't already in the JSON."""
+    numbers printed to stdout, plus, for every problem found, the steps to fix
+    it. Pure formatting: no interpretation, no ranking, no number and no
+    guidance that isn't already in the result."""
     lines = []
+
+    root_issues = result.get("issues", [])
+    if root_issues:
+        lines.append("# DORA Metrics")
+        lines.append("")
+        _render_issue_groups(root_issues, lines)
+
     for p in result["projects"]:
         lines.append(f"# DORA Metrics — {p['name']}")
         lines.append("")
         for r in p["repos"]:
-            if "error" in r:
-                lines.append(f"## `{r['repo']}` — ERROR")
-                lines.append("")
-                lines.append(r["error"])
-                lines.append("")
-                continue
             type_label = ", ".join(r.get("type", [])) or "unspecified"
+            if not r.get("measured", True):
+                lines.append(f"## `{r['repo']}` — not measured")
+                lines.append("")
+                _render_issue_groups(r.get("issues", []), lines)
+                continue
             lines.append(f"## `{r['repo']}` ({type_label}) — deploy_source: {r.get('deploy_source', 'release')}")
             lines.append("")
             lines.append(f"- **Deployment Frequency** (window {window_days}d): {r['deployment_frequency']}")
@@ -545,11 +590,7 @@ def format_human_summary(result: dict, window_days: int) -> str:
             else:
                 lines.append("- **Median Lead Time**: no data in the window")
             lines.append("")
-            if r["warnings"]:
-                lines.append("**Warnings:**")
-                for w in r["warnings"]:
-                    lines.append(f"- {w}")
-                lines.append("")
+            _render_issue_groups(r.get("issues", []), lines)
     return "\n".join(lines).rstrip() + "\n"
 
 
