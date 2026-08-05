@@ -562,5 +562,83 @@ class TestDiagnoseMarkers(unittest.TestCase):
         self.assertIn("4", issues[0]["message"])
 
 
+class TestBuildResult(unittest.TestCase):
+    PROJECTS = [{"name": "P", "repos": [{"repo": "a/b", "type": ["web"], "prod_branch": "main"}]}]
+
+    def test_blocked_repo_is_not_measured(self):
+        blocked = [dora_metrics.make_issue("repo_unreachable", "blocked", "unreachable")]
+        with patch.object(dora_metrics, "preflight_repo", return_value=blocked), \
+             patch.object(dora_metrics, "compute_repo_metrics") as compute:
+            result = dora_metrics.build_result(
+                session=None, projects=self.PROJECTS, tag_pattern=r"^v", window_days=14,
+                now=dt("2026-07-03T00:00:00Z"))
+        compute.assert_not_called()
+        repo = result["projects"][0]["repos"][0]
+        self.assertFalse(repo["measured"])
+        self.assertEqual([i["code"] for i in repo["issues"]], ["repo_unreachable"])
+
+    def test_preflight_and_marker_issues_are_merged_in_order(self):
+        preflight = [dora_metrics.make_issue("branch_not_found", "partial", "branch")]
+        metrics = {"repo": "a/b", "deployment_frequency": 0, "lead_time_median_hours": None,
+                   "lead_time_n": 0, "markers_total": 0, "latest_marker_at": None,
+                   "issues": [], "warnings": []}
+        markers = [dora_metrics.make_issue("no_markers_at_all", "partial", "no markers")]
+        with patch.object(dora_metrics, "preflight_repo", return_value=preflight), \
+             patch.object(dora_metrics, "compute_repo_metrics", return_value=dict(metrics)), \
+             patch.object(dora_metrics, "diagnose_markers", return_value=markers):
+            result = dora_metrics.build_result(
+                session=None, projects=self.PROJECTS, tag_pattern=r"^v", window_days=14,
+                now=dt("2026-07-03T00:00:00Z"))
+        repo = result["projects"][0]["repos"][0]
+        self.assertEqual([i["code"] for i in repo["issues"]], ["branch_not_found", "no_markers_at_all"])
+        self.assertEqual(repo["warnings"], [i["message"] for i in repo["issues"]])
+        self.assertTrue(repo["measured"])
+
+    def test_api_exception_mid_measurement_becomes_a_coded_issue(self):
+        with patch.object(dora_metrics, "preflight_repo", return_value=[]), \
+             patch.object(dora_metrics, "compute_repo_metrics",
+                          side_effect=dora_metrics.GitHubError("401 Unauthorized. Check that GITHUB_TOKEN...")):
+            result = dora_metrics.build_result(
+                session=None, projects=self.PROJECTS, tag_pattern=r"^v", window_days=14,
+                now=dt("2026-07-03T00:00:00Z"))
+        repo = result["projects"][0]["repos"][0]
+        self.assertFalse(repo["measured"])
+        self.assertEqual([i["code"] for i in repo["issues"]], ["token_unauthorized"])
+
+    def test_unrecognized_api_exception_falls_back_to_github_api_error(self):
+        with patch.object(dora_metrics, "preflight_repo", return_value=[]), \
+             patch.object(dora_metrics, "compute_repo_metrics",
+                          side_effect=dora_metrics.GitHubError("GitHub API error 500 at ...")):
+            result = dora_metrics.build_result(
+                session=None, projects=self.PROJECTS, tag_pattern=r"^v", window_days=14,
+                now=dt("2026-07-03T00:00:00Z"))
+        self.assertEqual([i["code"] for i in result["projects"][0]["repos"][0]["issues"]], ["github_api_error"])
+
+    def test_one_blocked_repo_does_not_stop_the_next(self):
+        projects = [{"name": "P", "repos": [{"repo": "a/b", "prod_branch": "main"},
+                                             {"repo": "a/c", "prod_branch": "main"}]}]
+        metrics = {"repo": "a/c", "deployment_frequency": 1, "lead_time_median_hours": None,
+                   "lead_time_n": 0, "markers_total": 1, "latest_marker_at": "2026-07-01T00:00:00Z",
+                   "issues": [], "warnings": []}
+        blocked = [dora_metrics.make_issue("repo_unreachable", "blocked", "unreachable")]
+        with patch.object(dora_metrics, "preflight_repo", side_effect=[blocked, []]), \
+             patch.object(dora_metrics, "compute_repo_metrics", return_value=dict(metrics)), \
+             patch.object(dora_metrics, "diagnose_markers", return_value=[]):
+            result = dora_metrics.build_result(
+                session=None, projects=projects, tag_pattern=r"^v", window_days=14,
+                now=dt("2026-07-03T00:00:00Z"))
+        repos = result["projects"][0]["repos"]
+        self.assertFalse(repos[0]["measured"])
+        self.assertTrue(repos[1]["measured"])
+
+
+class TestNoCredentialResult(unittest.TestCase):
+    def test_builds_a_report_instead_of_dying(self):
+        result = dora_metrics.no_credential_result(now=dt("2026-07-03T00:00:00Z"), window_days=14, tag_pattern=r"^v")
+        self.assertEqual([i["code"] for i in result["issues"]], ["no_credential"])
+        self.assertEqual(result["projects"], [])
+        self.assertTrue(dora_metrics.has_blocked(result))
+
+
 if __name__ == "__main__":
     unittest.main()

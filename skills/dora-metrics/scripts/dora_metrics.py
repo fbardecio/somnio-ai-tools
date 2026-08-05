@@ -640,6 +640,104 @@ def validate_deploy_sources(projects) -> None:
                 )
 
 
+def classify_github_error(repo: str, message: str) -> dict:
+    """Maps an exception raised mid-measurement onto a code, so an access
+    problem reaches the report with steps instead of as raw text."""
+    lowered = message.lower()
+    if "401" in message:
+        return make_issue("token_unauthorized", "blocked",
+                          f"{repo}: 401 Unauthorized from the GitHub API — the credential is not valid for this repo.")
+    if "rate limit" in lowered:
+        return make_issue("rate_limited", "blocked",
+                          f"{repo}: GitHub API rate limit reached — it could not be measured in this run.")
+    if "404" in message:
+        return make_issue("repo_unreachable", "blocked",
+                          f"{repo}: the GitHub API returned 404 — the repo is unreachable with this credential, "
+                          "it could not be measured.",
+                          evidence={"status": 404})
+    return make_issue("github_api_error", "blocked", f"{repo}: {message}")
+
+
+def build_result(session, projects, tag_pattern: str, window_days: int, now: datetime) -> dict:
+    """Measures every repo of every project. A repo that can't be measured
+    contributes its problems to the report and the run continues with the next
+    one — a broken access on one repo must not cost the numbers of the others."""
+    result = {
+        "generated_at": fmt_ts(now),
+        "window_days": window_days,
+        "tag_pattern": tag_pattern,
+        "issues": [],       # global problems, not tied to a repo
+        "projects": [],
+    }
+
+    for project in projects:
+        repos_result = []
+        for repo_cfg in project["repos"]:
+            repo = repo_cfg["repo"]
+            branch = repo_cfg["prod_branch"]
+            repo_tag_pattern = repo_cfg.get("tag_pattern", tag_pattern)
+            deploy_source = repo_cfg.get("deploy_source", "release")
+
+            issues = preflight_repo(session, repo, branch)
+            if any(i["impact"] == "blocked" for i in issues):
+                repos_result.append({
+                    "repo": repo, "prod_branch": branch, "deploy_source": deploy_source,
+                    "type": repo_cfg.get("type", []), "measured": False,
+                    "issues": issues, "warnings": [i["message"] for i in issues],
+                })
+                continue
+
+            try:
+                r = compute_repo_metrics(session, repo, branch, repo_tag_pattern, window_days, now,
+                                          deploy_source=deploy_source)
+                r["issues"] = issues + r["issues"] + diagnose_markers(
+                    session, repo, repo_tag_pattern, deploy_source,
+                    r["markers_total"], r["deployment_frequency"], r["latest_marker_at"],
+                )
+                r["warnings"] = [i["message"] for i in r["issues"] if i["impact"] != "none"]
+                r["measured"] = True
+                r["type"] = repo_cfg.get("type", [])
+            except (GitHubError, requests.exceptions.RequestException) as e:
+                issues = issues + [classify_github_error(repo, str(e))]
+                r = {
+                    "repo": repo, "prod_branch": branch, "deploy_source": deploy_source,
+                    "type": repo_cfg.get("type", []), "measured": False,
+                    "issues": issues, "warnings": [i["message"] for i in issues],
+                }
+            repos_result.append(r)
+        result["projects"].append({"name": project["name"], "repos": repos_result})
+    return result
+
+
+def no_credential_result(now: datetime, window_days: int, tag_pattern: str) -> dict:
+    """The run can't measure anything, but it still produces a report: the
+    person who ran it ends up with a file stating what happened and how to fix
+    it, instead of a stderr line that scrolls away."""
+    return {
+        "generated_at": fmt_ts(now),
+        "window_days": window_days,
+        "tag_pattern": tag_pattern,
+        "issues": [make_issue("no_credential", "blocked",
+                              "No GitHub credential found — nothing could be measured in this run.")],
+        "projects": [],
+    }
+
+
+def write_output(result: dict, window_days: int, out_dir: str, now: datetime) -> None:
+    output_json = json.dumps(result, indent=2, ensure_ascii=False)
+    summary = format_human_summary(result, window_days)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+        base = os.path.join(out_dir, f"{now.strftime('%Y-%m-%d')}_dora")
+        with open(f"{base}.json", "w") as f:
+            f.write(output_json)
+        with open(f"{base}.md", "w") as f:
+            f.write(summary)
+        print(f"Output saved to {base}.json and {base}.md\n")
+    print(summary)
+    print(output_json)
+
+
 def main():
     ap = argparse.ArgumentParser(description="DORA fetching (Deployment Frequency + Lead Time) from the GitHub API.")
     ap.add_argument("--config", default=os.path.join(os.path.dirname(__file__), "..", "config", "projects.json"))
@@ -658,22 +756,23 @@ def main():
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
 
-    token = get_github_token()
-    if not token:
-        print(
-            "ERROR: no GitHub credential found.\n"
-            "  Option 1: export GITHUB_TOKEN=ghp_xxxx\n"
-            "  Option 2: run `gh auth login` once (if you have the GitHub CLI "
-            "installed) — the script detects it on its own, nothing to export.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    guidance = troubleshooting.load_guidance(troubleshooting.default_path())
+    now = datetime.now(timezone.utc)
 
     with open(args.config, "r") as f:
         config = json.load(f)
 
     tag_pattern = config["tag_pattern"]
     window_days = args.window_days if args.window_days is not None else config["window_days"]
+
+    token = get_github_token()
+    if not token:
+        # No hard exit: the report itself carries the problem and its steps.
+        result = no_credential_result(now, window_days, tag_pattern)
+        hydrate_issues(result, guidance)
+        write_output(result, window_days, args.out_dir, now)
+        sys.exit(1)
+
     projects = config["projects"]
     if args.project:
         projects = [p for p in projects if p["name"].lower() == args.project.lower()]
@@ -693,47 +792,13 @@ def main():
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
 
-    session = gh_session(token)
-    now = datetime.now(timezone.utc)
+    result = build_result(gh_session(token), projects, tag_pattern, window_days, now)
+    hydrate_issues(result, guidance)
+    write_output(result, window_days, args.out_dir, now)
 
-    result = {
-        "generated_at": fmt_ts(now),
-        "window_days": window_days,
-        "tag_pattern": tag_pattern,
-        "projects": [],
-    }
-
-    for project in projects:
-        repos_result = []
-        for repo_cfg in project["repos"]:
-            try:
-                repo_tag_pattern = repo_cfg.get("tag_pattern", tag_pattern)
-                deploy_source = repo_cfg.get("deploy_source", "release")
-                r = compute_repo_metrics(
-                    session, repo_cfg["repo"], repo_cfg["prod_branch"], repo_tag_pattern, window_days, now,
-                    deploy_source=deploy_source,
-                )
-                r["type"] = repo_cfg.get("type", [])
-            except (GitHubError, requests.exceptions.RequestException) as e:
-                r = {"repo": repo_cfg["repo"], "error": str(e)}
-            repos_result.append(r)
-        result["projects"].append({"name": project["name"], "repos": repos_result})
-
-    output_json = json.dumps(result, indent=2, ensure_ascii=False)
-    summary = format_human_summary(result, window_days)
-
-    if args.out_dir:
-        os.makedirs(args.out_dir, exist_ok=True)
-        base = os.path.join(args.out_dir, f"{now.strftime('%Y-%m-%d')}_dora")
-        with open(f"{base}.json", "w") as f:
-            f.write(output_json)
-        with open(f"{base}.md", "w") as f:
-            f.write(summary)
-        print(f"Output saved to {base}.json and {base}.md\n")
-
-    # Human-readable summary — it ONLY fetches and reports, does not interpret.
-    print(summary)
-    print(output_json)
+    # Non-zero when something couldn't be measured at all, so CI notices. A
+    # "partial" issue doesn't change it: the run measured, with declared gaps.
+    sys.exit(1 if has_blocked(result) else 0)
 
 
 if __name__ == "__main__":
