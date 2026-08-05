@@ -258,6 +258,20 @@ def preflight_repo(session: requests.Session, repo: str, branch: str) -> list:
             "(Deployment Frequency is unaffected).",
             evidence={"prod_branch": branch},
         ))
+    elif _is_rate_limited(branch_resp):
+        issues.append(make_issue(
+            "rate_limited", "partial",
+            f"{repo}: GitHub API rate limit reached while checking branch '{branch}' — its existence "
+            "could not be verified.",
+            evidence={"prod_branch": branch},
+        ))
+    elif branch_resp.status_code != 200:
+        issues.append(make_issue(
+            "github_api_error", "partial",
+            f"{repo}: GitHub API error {branch_resp.status_code} checking branch '{branch}' — its "
+            f"existence could not be verified: {(branch_resp.text or '')[:300]}",
+            evidence={"status": branch_resp.status_code, "prod_branch": branch},
+        ))
     return issues
 
 

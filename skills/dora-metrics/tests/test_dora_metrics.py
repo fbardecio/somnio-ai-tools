@@ -415,6 +415,19 @@ class TestPreflightRepo(unittest.TestCase):
         self.assertEqual(issues[0]["evidence"]["prod_branch"], "master")
         self.assertIn("master", issues[0]["message"])
 
+    def test_branch_rate_limit_is_reported_not_treated_as_success(self):
+        session = FakeSession({"/branches/main": FakeResponse(403, "API rate limit exceeded for user")})
+        issues = dora_metrics.preflight_repo(session, "a/b", "main")
+        self.assertEqual([i["code"] for i in issues], ["rate_limited"])
+        self.assertEqual(issues[0]["impact"], "partial")
+
+    def test_branch_unexpected_status_is_reported_not_treated_as_success(self):
+        session = FakeSession({"/branches/main": FakeResponse(500, "boom")})
+        issues = dora_metrics.preflight_repo(session, "a/b", "main")
+        self.assertEqual([i["code"] for i in issues], ["github_api_error"])
+        self.assertEqual(issues[0]["impact"], "partial")
+        self.assertEqual(issues[0]["evidence"]["prod_branch"], "main")
+
     def test_branch_is_not_checked_when_the_repo_is_unreachable(self):
         session = FakeSession({"/repos/a/b": FakeResponse(404, "Not Found")})
         dora_metrics.preflight_repo(session, "a/b", "main")
