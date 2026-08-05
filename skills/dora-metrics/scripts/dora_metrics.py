@@ -219,6 +219,48 @@ def get_merged_prs_between(session: requests.Session, repo: str, branch: str, st
     return prs
 
 
+def _is_rate_limited(resp) -> bool:
+    return resp.status_code == 403 and "rate limit" in (resp.text or "").lower()
+
+
+def preflight_repo(session: requests.Session, repo: str, branch: str) -> list:
+    """Checks, before measuring, the two things whose absence would otherwise
+    produce a silent or misleading result: that the credential can see the repo
+    at all, and that the configured production branch exists. Two cheap REST
+    calls per repo (not Search, which is the rate-limited API).
+
+    A returned issue with impact "blocked" means the repo cannot be measured;
+    the caller skips it and keeps going with the rest of the project."""
+    issues = []
+
+    resp = session.get(f"{API_ROOT}/repos/{repo}")
+    if resp.status_code == 401:
+        return [make_issue("token_unauthorized", "blocked",
+                           f"{repo}: 401 Unauthorized from the GitHub API — the credential is not valid for this repo.")]
+    if _is_rate_limited(resp):
+        return [make_issue("rate_limited", "blocked",
+                           f"{repo}: GitHub API rate limit reached — it could not be measured in this run.")]
+    if resp.status_code in (403, 404):
+        return [make_issue("repo_unreachable", "blocked",
+                           f"{repo}: the GitHub API returned {resp.status_code} — the repo is unreachable with this "
+                           "credential, it could not be measured.",
+                           evidence={"status": resp.status_code})]
+    if resp.status_code != 200:
+        return [make_issue("github_api_error", "blocked",
+                           f"{repo}: GitHub API error {resp.status_code} on /repos/{repo}: {(resp.text or '')[:300]}",
+                           evidence={"status": resp.status_code})]
+
+    branch_resp = session.get(f"{API_ROOT}/repos/{repo}/branches/{branch}")
+    if branch_resp.status_code == 404:
+        issues.append(make_issue(
+            "branch_not_found", "partial",
+            f"{repo}: branch '{branch}' does not exist — Lead Time can't be measured against it "
+            "(Deployment Frequency is unaffected).",
+            evidence={"prod_branch": branch},
+        ))
+    return issues
+
+
 VALID_DEPLOY_SOURCES = ("release", "tag")
 
 

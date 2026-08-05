@@ -360,5 +360,71 @@ class TestGuidanceDrift(unittest.TestCase):
         self.assertEqual(documented, expected)
 
 
+class FakeResponse:
+    def __init__(self, status_code, text=""):
+        self.status_code = status_code
+        self.text = text
+
+
+class FakeSession:
+    """Returns a canned response per URL suffix. Anything not listed 200s."""
+
+    def __init__(self, routes):
+        self.routes = routes
+        self.calls = []
+
+    def get(self, url, params=None):
+        self.calls.append(url)
+        for suffix, resp in self.routes.items():
+            if url.endswith(suffix):
+                return resp
+        return FakeResponse(200)
+
+
+class TestPreflightRepo(unittest.TestCase):
+    def test_all_good_returns_no_issues(self):
+        session = FakeSession({})
+        self.assertEqual(dora_metrics.preflight_repo(session, "a/b", "main"), [])
+
+    def test_repo_404_is_blocked(self):
+        session = FakeSession({"/repos/a/b": FakeResponse(404, "Not Found")})
+        issues = dora_metrics.preflight_repo(session, "a/b", "main")
+        self.assertEqual([i["code"] for i in issues], ["repo_unreachable"])
+        self.assertEqual(issues[0]["impact"], "blocked")
+
+    def test_repo_401_is_token_unauthorized(self):
+        session = FakeSession({"/repos/a/b": FakeResponse(401, "Bad credentials")})
+        issues = dora_metrics.preflight_repo(session, "a/b", "main")
+        self.assertEqual([i["code"] for i in issues], ["token_unauthorized"])
+
+    def test_rate_limit_is_its_own_code(self):
+        session = FakeSession({"/repos/a/b": FakeResponse(403, "API rate limit exceeded for user")})
+        issues = dora_metrics.preflight_repo(session, "a/b", "main")
+        self.assertEqual([i["code"] for i in issues], ["rate_limited"])
+
+    def test_repo_403_without_rate_limit_is_unreachable(self):
+        session = FakeSession({"/repos/a/b": FakeResponse(403, "Resource not accessible")})
+        issues = dora_metrics.preflight_repo(session, "a/b", "main")
+        self.assertEqual([i["code"] for i in issues], ["repo_unreachable"])
+
+    def test_branch_404_is_partial_and_names_the_branch(self):
+        session = FakeSession({"/branches/master": FakeResponse(404, "Branch not found")})
+        issues = dora_metrics.preflight_repo(session, "a/b", "master")
+        self.assertEqual([i["code"] for i in issues], ["branch_not_found"])
+        self.assertEqual(issues[0]["impact"], "partial")
+        self.assertEqual(issues[0]["evidence"]["prod_branch"], "master")
+        self.assertIn("master", issues[0]["message"])
+
+    def test_branch_is_not_checked_when_the_repo_is_unreachable(self):
+        session = FakeSession({"/repos/a/b": FakeResponse(404, "Not Found")})
+        dora_metrics.preflight_repo(session, "a/b", "main")
+        self.assertTrue(all("/branches/" not in url for url in session.calls))
+
+    def test_unexpected_status_is_github_api_error(self):
+        session = FakeSession({"/repos/a/b": FakeResponse(500, "boom")})
+        issues = dora_metrics.preflight_repo(session, "a/b", "main")
+        self.assertEqual([i["code"] for i in issues], ["github_api_error"])
+
+
 if __name__ == "__main__":
     unittest.main()
