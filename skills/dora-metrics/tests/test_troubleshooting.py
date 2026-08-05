@@ -87,5 +87,39 @@ class TestLoadGuidance(unittest.TestCase):
         self.assertEqual(troubleshooting.load_guidance("/nonexistent/troubleshooting.md"), {})
 
 
+EXPECTED_CODES = {
+    "no_credential",
+    "repo_unreachable",
+    "token_unauthorized",
+    "rate_limited",
+    "branch_not_found",
+    "no_markers_at_all",
+    "no_markers_matching_pattern",
+    "deploy_source_mismatch",
+    "matching_releases_all_draft",
+    "no_markers_in_window",
+    "first_marker_no_prior",
+    "no_prs_in_range",
+    "pr_first_commit_unfetchable",
+}
+
+
+class TestRealTroubleshootingFile(unittest.TestCase):
+    """The shipped file must actually parse — a broken anchor or a renamed
+    subsection would silently strip the steps from every report."""
+
+    def setUp(self):
+        self.guidance = troubleshooting.load_guidance(troubleshooting.default_path())
+
+    def test_has_every_expected_code(self):
+        self.assertEqual(set(self.guidance), EXPECTED_CODES)
+
+    def test_every_entry_has_what_and_where_to_fix(self):
+        for code, entry in self.guidance.items():
+            with self.subTest(code=code):
+                self.assertTrue(entry["what"], f"{code} has no What")
+                self.assertTrue(entry["where_to_fix"], f"{code} has no Where to fix")
+
+
 if __name__ == "__main__":
     unittest.main()
