@@ -78,3 +78,7 @@ agent-rules/adapters/windsurf/.windsurfrules
 agent-rules/adapters/codex/system-prompt.md
 agent-rules/adapters/cursor/rules/
 agent-rules/adapters/antigravity/rules/
+
+# Python bytecode (the dora-metrics test suite generates these)
+__pycache__/
+*.pyc
