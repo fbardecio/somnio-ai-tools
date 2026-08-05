@@ -439,5 +439,87 @@ class TestPreflightRepo(unittest.TestCase):
         self.assertEqual([i["code"] for i in issues], ["github_api_error"])
 
 
+class TestDiagnoseMarkers(unittest.TestCase):
+    """diagnose_markers only touches the network when something needs
+    explaining, so the happy path is asserted to make zero calls."""
+
+    def _diagnose(self, **kw):
+        params = dict(session=None, repo="a/b", tag_pattern=r"^v\d+\.\d+\.\d+$",
+                      deploy_source="release", markers_total=0,
+                      deployment_frequency=0, latest_marker_at=None)
+        params.update(kw)
+        return dora_metrics.diagnose_markers(**params)
+
+    def test_healthy_repo_produces_no_issues_and_no_calls(self):
+        with patch.object(dora_metrics, "get_release_tag_names") as names, \
+             patch.object(dora_metrics, "get_all_tag_names") as tags:
+            issues = self._diagnose(markers_total=3, deployment_frequency=2,
+                                    latest_marker_at="2026-07-01T00:00:00Z")
+        self.assertEqual(issues, [])
+        names.assert_not_called()
+        tags.assert_not_called()
+
+    def test_no_markers_at_all(self):
+        with patch.object(dora_metrics, "get_release_tag_names", return_value={"published": [], "draft": []}), \
+             patch.object(dora_metrics, "get_all_tag_names", return_value=[]):
+            issues = self._diagnose()
+        self.assertEqual([i["code"] for i in issues], ["no_markers_at_all"])
+        self.assertEqual(issues[0]["impact"], "partial")
+
+    def test_markers_exist_but_none_match_the_pattern(self):
+        found = ["release-2026-07-01", "release-2026-07-14"]
+        with patch.object(dora_metrics, "get_release_tag_names", return_value={"published": found, "draft": []}), \
+             patch.object(dora_metrics, "get_all_tag_names", return_value=found):
+            issues = self._diagnose()
+        self.assertEqual([i["code"] for i in issues], ["no_markers_matching_pattern"])
+        self.assertEqual(issues[0]["evidence"]["names_found"], found)
+        self.assertEqual(issues[0]["evidence"]["tag_pattern"], r"^v\d+\.\d+\.\d+$")
+
+    def test_evidence_is_capped_at_five_names(self):
+        found = [f"release-{n}" for n in range(12)]
+        with patch.object(dora_metrics, "get_release_tag_names", return_value={"published": found, "draft": []}), \
+             patch.object(dora_metrics, "get_all_tag_names", return_value=[]):
+            issues = self._diagnose()
+        self.assertEqual(len(issues[0]["evidence"]["names_found"]), 5)
+        self.assertEqual(issues[0]["evidence"]["names_total"], 12)
+
+    def test_deploy_source_mismatch_release_configured_but_tags_used(self):
+        with patch.object(dora_metrics, "get_release_tag_names", return_value={"published": [], "draft": []}), \
+             patch.object(dora_metrics, "get_all_tag_names", return_value=["v1.4.0", "v1.5.0"]):
+            issues = self._diagnose()
+        codes = [i["code"] for i in issues]
+        self.assertIn("deploy_source_mismatch", codes)
+        self.assertEqual(issues[codes.index("deploy_source_mismatch")]["evidence"]["matching_other_source"],
+                         ["v1.4.0", "v1.5.0"])
+
+    def test_deploy_source_mismatch_tag_configured_but_releases_used(self):
+        with patch.object(dora_metrics, "get_all_tag_names", return_value=[]), \
+             patch.object(dora_metrics, "get_release_tag_names", return_value={"published": ["v1.4.0"], "draft": []}):
+            issues = self._diagnose(deploy_source="tag")
+        self.assertIn("deploy_source_mismatch", [i["code"] for i in issues])
+
+    def test_matching_releases_all_draft(self):
+        with patch.object(dora_metrics, "get_release_tag_names",
+                          return_value={"published": [], "draft": ["v1.4.0"]}), \
+             patch.object(dora_metrics, "get_all_tag_names", return_value=[]):
+            issues = self._diagnose()
+        codes = [i["code"] for i in issues]
+        self.assertIn("matching_releases_all_draft", codes)
+
+    def test_drafts_are_not_checked_for_deploy_source_tag(self):
+        with patch.object(dora_metrics, "get_all_tag_names", return_value=[]), \
+             patch.object(dora_metrics, "get_release_tag_names", return_value={"published": [], "draft": ["v1.4.0"]}):
+            issues = self._diagnose(deploy_source="tag")
+        self.assertNotIn("matching_releases_all_draft", [i["code"] for i in issues])
+
+    def test_markers_exist_but_none_in_window_is_impact_none(self):
+        issues = self._diagnose(markers_total=4, deployment_frequency=0,
+                                latest_marker_at="2026-05-02T00:00:00Z")
+        self.assertEqual([i["code"] for i in issues], ["no_markers_in_window"])
+        self.assertEqual(issues[0]["impact"], "none")
+        self.assertIn("2026-05-02T00:00:00Z", issues[0]["message"])
+        self.assertIn("4", issues[0]["message"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -275,6 +275,95 @@ def preflight_repo(session: requests.Session, repo: str, branch: str) -> list:
     return issues
 
 
+EVIDENCE_SAMPLE_SIZE = 5
+
+
+def get_release_tag_names(session: requests.Session, repo: str) -> dict:
+    """Tag names of every Release in the repo, split by draft state. Used only
+    to explain an empty result — the measurement itself goes through
+    get_prod_releases."""
+    published, draft = [], []
+    for r in gh_paginate(session, f"{API_ROOT}/repos/{repo}/releases"):
+        name = r.get("tag_name", "")
+        if not name:
+            continue
+        (draft if r.get("draft") else published).append(name)
+    return {"published": published, "draft": draft}
+
+
+def get_all_tag_names(session: requests.Session, repo: str) -> list:
+    """Every git tag name in the repo, unfiltered."""
+    return [t.get("name", "") for t in gh_paginate(session, f"{API_ROOT}/repos/{repo}/tags") if t.get("name")]
+
+
+def diagnose_markers(session: requests.Session, repo: str, tag_pattern: str, deploy_source: str,
+                     markers_total: int, deployment_frequency: int, latest_marker_at: str) -> list:
+    """Explains a deploy count of 0 instead of leaving it mute — the difference
+    between 'they didn't deploy' and 'the repo isn't instrumented' is invisible
+    in the number alone, and only the second one is fixable.
+
+    Costs nothing when markers were found inside the window: the extra API calls
+    run only on the paths that need evidence."""
+    if markers_total > 0:
+        if deployment_frequency == 0:
+            return [make_issue(
+                "no_markers_in_window", "none",
+                f"{repo}: 0 deploys in the window. {markers_total} deploy marker(s) exist in history, "
+                f"the most recent on {latest_marker_at}.",
+                evidence={"markers_total": markers_total, "latest_marker_at": latest_marker_at},
+            )]
+        return []
+
+    issues = []
+    pattern = re.compile(tag_pattern)
+    releases = get_release_tag_names(session, repo)
+    tag_names = get_all_tag_names(session, repo)
+
+    if deploy_source == "tag":
+        own_names, own_label = tag_names, "tags"
+        other_names, other_label = releases["published"], "published Releases"
+    else:
+        own_names, own_label = releases["published"], "published Releases"
+        other_names, other_label = tag_names, "tags"
+
+    if not own_names:
+        issues.append(make_issue(
+            "no_markers_at_all", "partial",
+            f"{repo}: no {own_label} at all — there is no deploy marker to count.",
+            evidence={"deploy_source": deploy_source},
+        ))
+    else:
+        issues.append(make_issue(
+            "no_markers_matching_pattern", "partial",
+            f"{repo}: {len(own_names)} {own_label} found, none matching tag_pattern "
+            f"'{tag_pattern}' — no deploy marker was counted.",
+            evidence={"tag_pattern": tag_pattern,
+                      "names_found": own_names[:EVIDENCE_SAMPLE_SIZE],
+                      "names_total": len(own_names)},
+        ))
+
+    if deploy_source == "release":
+        matching_drafts = [n for n in releases["draft"] if pattern.match(n)]
+        if matching_drafts:
+            issues.append(make_issue(
+                "matching_releases_all_draft", "partial",
+                f"{repo}: {len(matching_drafts)} Release(s) matching tag_pattern exist but are all drafts — "
+                "drafts are not counted as deploys.",
+                evidence={"draft_tags": matching_drafts[:EVIDENCE_SAMPLE_SIZE]},
+            ))
+
+    matching_other = [n for n in other_names if pattern.match(n)]
+    if matching_other:
+        issues.append(make_issue(
+            "deploy_source_mismatch", "partial",
+            f"{repo}: deploy_source is '{deploy_source}' and nothing matched, but {len(matching_other)} "
+            f"{other_label} matching tag_pattern do exist.",
+            evidence={"deploy_source": deploy_source,
+                      "matching_other_source": matching_other[:EVIDENCE_SAMPLE_SIZE]},
+        ))
+    return issues
+
+
 VALID_DEPLOY_SOURCES = ("release", "tag")
 
 
