@@ -15,21 +15,26 @@
 | `example-org/example-frontend` | web, mobile | release | 2 | 4.3h (n=3) |
 | `example-partner-org/example-backend` | backend | release | 1 | 11.7h (n=2) |
 
-**Warnings** (`example-org/example-frontend`):
+**Problems found and how to fix them** (`example-org/example-frontend`):
 
-- `Release v1.4.0 has no known prior release — the PR population can't be bounded, it's excluded from the Lead Time.`
-  - **What:** this is the earliest deploy the script can see in the repo's
-    history for the configured marker, so its Lead Time has no prior deploy to
-    bound the PR population against and is excluded. It still counts toward
-    Deployment Frequency.
-  - **How to check:** confirm it is the earliest Release/tag matching
-    `tag_pattern` in the repo.
-  - **Where to fix:** nothing to fix — structural, resolves after the next
-    deploy. (From `references/troubleshooting.md`.)
+- `example-org/example-frontend: 3 published Releases found, none matching tag_pattern '^v\d+\.\d+\.\d+$' — no deploy marker was counted.`
+  - **What:** Releases or tags exist, but none of their names match the
+    `tag_pattern` regex, so none was counted as a deploy.
+  - **How to check:** Compare the names in the evidence
+    (`release-2026-07-01`, `release-2026-07-14`) with the `tag_pattern` in
+    `config/projects.json`.
+  - **Where to fix:** Set `repos[].tag_pattern` for that repo to a regex
+    matching its real naming.
 
-> Warnings are process-gap signals this calibration stage is meant to expose,
-> not noise to hide — shown verbatim from the script output, with
-> measurement-setup guidance from `references/troubleshooting.md` beneath each.
+**Notes** (`example-partner-org/example-backend`):
+
+- `example-partner-org/example-backend: 0 deploys in the window. 4 deploy marker(s) exist in history, the most recent on 2026-06-02T10:00:00Z.`
+  - **What:** This is a fact about the window, not a setup problem.
+  - **Where to fix:** Nothing to fix.
+
+> Problems and notes come straight from the script's `issues`, message verbatim
+> with the steps the script already attached from `references/troubleshooting.md`.
+> Never add steps that are not in the JSON.
 
 ---
 
@@ -42,12 +47,13 @@ Structure notes for the report-writer (not part of the rendered reply):
   Lead Time with its n (lead_time_median_hours + lead_time_n from the JSON).
 - Header the row with the repo's `type` and `deploy_source` from the JSON.
 - State the measurement window once (default 14 days).
-- Add a "Warnings" sub-list under a repo ONLY when its `warnings` array is
-  non-empty; copy each warning string verbatim. Omit the sub-list when empty.
-- Under each warning, add the matching What / How to check / Where to fix
-  guidance from `references/troubleshooting.md` (read that file, match by the
-  warning text). It is additive to the verbatim text and covers only the
-  measurement setup — never whether a number is good or bad.
+- Add a "Problems found and how to fix them" sub-list under a repo when it has
+  issues with impact blocked/partial, and a "Notes" sub-list for impact none.
+  Copy each `message` verbatim and render its `guidance` beneath it. Do NOT look
+  anything up — the guidance is already in the JSON. If `guidance` is null, say
+  there is none.
+- Root-level `issues` (no credential, etc.) render before any project section.
+- A repo with `measured: false` has no metric fields: render its problems only.
 - If the JSON was saved via --out-dir, mention the path below the report,
   e.g.: "Saved to `outputs/2026-07-06_dora.json`."
 - Do NOT add columns, labels, or prose that interpret, rank, score, or compare

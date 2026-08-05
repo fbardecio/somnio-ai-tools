@@ -130,6 +130,13 @@ without re-parsing the JSON):
 
 - **Deployment Frequency** (window 14d): 2
 - **Median Lead Time**: 4.3h (n=3)
+
+**Notes**:
+
+- `example-org/example-frontend: 0 deploys in the window. 4 deploy marker(s)
+  exist in history, the most recent on 2026-06-02T10:00:00Z.`
+  - **What:** This is a fact about the window, not a setup problem.
+  - **Where to fix:** Nothing to fix.
 ```
 
 Portable JSON (if `--out-dir` is used), one repo inside `projects[].repos[]`:
@@ -150,9 +157,40 @@ Portable JSON (if `--out-dir` is used), one repo inside `projects[].repos[]`:
      "first_commit_ts": "2026-07-01T13:45:00Z",
      "deploy_ts": "2026-07-01T18:03:00Z", "lead_time_hours": 4.3}
   ],
-  "warnings": []
+  "measured": true,
+  "warnings": [],
+  "issues": [
+    {
+      "code": "no_markers_in_window",
+      "impact": "none",
+      "message": "example-org/example-frontend: 0 deploys in the window. 4 deploy marker(s) exist in history, the most recent on 2026-06-02T10:00:00Z.",
+      "evidence": {"markers_total": 4, "latest_marker_at": "2026-06-02T10:00:00Z"},
+      "guidance": {"what": "...", "how_to_check": "...", "where_to_fix": "..."}
+    }
+  ]
 }
 ```
+
+## When it can't measure
+
+The script diagnoses the repo's setup while it measures and reports every
+problem it finds **inside the same report**, with the steps to fix it: an
+unreachable repo or an invalid credential, a `prod_branch` that doesn't exist, a
+repo with no deploy markers, markers that don't match `tag_pattern`, a
+`deploy_source` pointing at the wrong kind of marker, matching Releases left as
+drafts. Running with no credential at all still produces a report — the one
+listing that problem — instead of dying on stderr.
+
+The steps live in `references/troubleshooting.md`, one anchored entry per
+problem code. That file is the single source of truth: the script parses it
+(`scripts/troubleshooting.py`) and embeds the steps in the JSON and in the saved
+`.md`, so editing the prose there changes every future report. Adding a new code
+means adding it to `ISSUE_CODES` in `scripts/dora_metrics.py` **and** writing its
+entry; a unit test fails if the two drift apart.
+
+Exit code: 1 when something could not be measured at all (`impact: blocked`), 0
+otherwise. A partially measured repo does not fail the run — the gaps are
+declared in the report.
 
 ## Testing
 
@@ -165,9 +203,10 @@ python3 -m unittest discover -s tests -p "test_*.py" -v
 ```
 
 They mock `requests.Session` and run in seconds. They cover the DF/LT
-calculation, the median, the exclusion of the first deploy, the warnings, and
-the config/CLI validations. Run these whenever `scripts/dora_metrics.py` is
-touched.
+calculation, the median, the exclusion of the first deploy, the setup
+diagnostics and their remediation steps, the report rendering, and the
+config/CLI validations. Run these whenever `scripts/dora_metrics.py` or
+`references/troubleshooting.md` is touched.
 
 ### E2E — against a real GitHub repo
 

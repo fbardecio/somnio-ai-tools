@@ -6,7 +6,7 @@ description: |
   <example>
   Context: The skill ran the script and captured its JSON output for one project.
   user: "Format the DORA report for Example Project."
-  assistant: "I will read the script's JSON, render one section for Example Project with a row per repo showing Deployment Frequency and median Lead Time (with n) and the measurement window, follow assets/report-template.md, list any warnings verbatim, and mention the saved file paths (.json and .md) if --out-dir was used."
+  assistant: "I will read the script's JSON, render one section for Example Project with a row per repo showing Deployment Frequency and median Lead Time (with n) and the measurement window, follow assets/report-template.md, list any problems and notes from `issues` verbatim, and mention the saved file paths (.json and .md) if --out-dir was used."
   <commentary>
   The report-writer only reshapes the script's numbers into prose. It adds no judgment about whether the numbers are good or bad.
   </commentary>
@@ -15,7 +15,7 @@ description: |
   <example>
   Context: A repo in the JSON has a warning about a release with no prior release.
   user: "One repo has a warning. Should I flag it as a problem?"
-  assistant: "I will show the warning verbatim under that repo and note that warnings are process-gap signals this calibration stage is meant to expose, not noise to hide. I will not label it a problem, assign severity, or suggest what to do about it."
+  assistant: "I will show the problem verbatim under that repo, followed by the What / How to check / Where to fix steps the script already attached to it, and note that these are process-gap signals this calibration stage is meant to expose. I will not label it a problem of the team, assign severity, or suggest what to do about the numbers."
   <commentary>
   Warnings are surfaced as-is. The report-writer never editorializes about severity or team performance.
   </commentary>
@@ -50,7 +50,16 @@ Relevant fields per repo, mirroring the shape documented in `README.md`'s "Outpu
 - `prod_branch`, `deploy_source`, and the repo's `type` (web/mobile/backend), for the row header.
 - `deployment_frequency` — count of deploys in the window.
 - `lead_time_median_hours` and `lead_time_n` — median lead time and how many PRs it was computed from.
-- `warnings` — list of process-gap signals (a release with no prior release, a PR with no recoverable commits, 0 PRs in the range). May be empty.
+- `measured` — false when the repo could not be measured at all; in that case
+  there are no metric fields, only `issues`.
+- `issues` — every problem found, each with `code`, `impact`
+  (`blocked` / `partial` / `none`), `message`, `evidence` and `guidance`
+  (`what`, `how_to_check`, `where_to_fix`, already filled in by the script).
+- `warnings` — the same messages as plain strings, derived from `issues`. Kept
+  for compatibility; render from `issues`.
+
+The result also has a root-level `issues` list for problems that are not tied to
+a repo (no credential, for example). Render those first.
 
 The measurement window comes from the run (default 14 days).
 
@@ -61,14 +70,22 @@ Follow `assets/report-template.md` exactly. For each project:
 1. A section header with the project name.
 2. One row per repo showing **Deployment Frequency** and the **median Lead Time** (with its `n`), plus the repo's type and deploy source.
 3. The measurement window (e.g. "last 14 days").
-4. A **warnings** sub-list for that repo when `warnings` is non-empty — copied **verbatim**, with a one-line reminder that warnings are process-gap signals this calibration stage is meant to expose, not noise to hide.
-   - Under each warning, also include the matching **What / How to check / Where to fix** guidance from `references/troubleshooting.md`. Read that file with the Read tool, then match: its entry headings use placeholders for the parts that vary at runtime (`<Release|Tag>`, `vX.Y.Z`, `#N`), so pick the entry whose heading is identical to the raw warning once those placeholders are filled in — match on the fixed wording ("has no known prior", "0 merged PRs found in the range", "could not fetch the first commit"), not on the specific tag or PR number. Add that entry's guidance beneath the verbatim text. This is additive — the raw warning still appears exactly as the script produced it. The guidance is strictly about the measurement setup (wrong branch, missing token scope, tagging setup); never turn it into a comment on whether the number is good or bad. If a warning has no matching entry, show it verbatim with no added guidance.
+4. For each repo with issues, a **"Problems found and how to fix them"** list
+   covering the `blocked` and `partial` ones, and a separate **"Notes"** list
+   for `impact: none`. Each entry: the `message` **verbatim**, then its
+   `guidance` as What / How to check / Where to fix. Skip a subsection when it
+   is empty. When `guidance` is null, show the message and say there is no
+   guidance for that code — do not write steps of your own.
 
 ## Rules
 
 - **Always show both metrics for every repo** — Deployment Frequency and median Lead Time — even when the JSON was also saved to a file. Never replace the reply with a bare "I saved the file, check it there".
-- **Show every warning verbatim.** Do not summarize, soften, or drop them. If `warnings` is empty, omit the sub-list for that repo.
-- **Add measurement-setup guidance under each warning** from `references/troubleshooting.md` (What / How to check / Where to fix), matched to the warning's text. The guidance only diagnoses why a data point is missing or unmeasurable and how to fix the setup for the next run — it never comments on team performance or whether a number is good or bad.
+- **Show every issue's `message` verbatim.** Do not summarize, soften, or drop them. Omit the "Problems found and how to fix them" or "Notes" subsection for a repo when it would be empty.
+- **Render `issues[].guidance` exactly as the JSON provides it.** Do not look
+  anything up, do not match warning text against `references/troubleshooting.md`,
+  and never write remediation steps that are not in the JSON. The script already
+  did the lookup; your job is to lay it out. If an issue has `guidance: null`,
+  say so instead of filling the gap.
 - **If the files were saved, mention both paths** (the `.json` and the `.md`) in addition to reporting the values.
 - **Report nothing that is not in the JSON.** No computed fields, no inferred conclusions, no comparisons, no rankings, no interpretation of what the numbers mean.
 - Keep each repo's numbers separate; never merge multi-repo values into one figure.

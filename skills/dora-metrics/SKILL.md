@@ -120,10 +120,12 @@ access to **all** the orgs of the project's repos (e.g. if it's multi-org:
 2. `gh auth token` — if the GitHub CLI is already logged in locally, there is
    nothing to ask for or paste.
 
-If neither is available, the script will say so explicitly when it runs (it
-does not fail silently). In that case, explain the two options to the user — do
-not ask them to paste a token in the chat if the flow is Cowork; in local
-Claude Code, suggest `gh auth login` if they haven't done it.
+If neither is available, the script no longer stops without output: it produces
+the report anyway, containing the `no_credential` problem and the steps to fix
+it (and saves it, if `--out-dir` was passed), and exits with code 1. Report it
+like any other problem — do not ask the user to paste a token in the chat if the
+flow is Cowork; in local Claude Code, suggest `gh auth login` if they haven't
+done it.
 
 ### Step 4 — Run the script
 
@@ -186,18 +188,21 @@ step guarantees) are:
   there".
 - Show the numbers exactly as the script produced them — do not reinterpret or
   rank them, that is a later step, outside the scope of this skill.
-- If there were `warnings` in the output (a release with no prior release, a PR
-  with no recoverable commits, 0 PRs in the range), show them **verbatim**:
-  they are a sign of process gaps, exactly what this calibration stage is meant
-  to expose, not noise to hide. In addition to the verbatim text, the
-  `report-writer` consults `references/troubleshooting.md` and, under each
-  warning it renders, includes that reference's **What / How to check / Where to
-  fix** guidance so whoever ran the skill can check or fix the measurement setup
-  without asking the maintainers. This is additive — the raw warning still shows
-  exactly as the script produced it — and the guidance stays strictly on the
-  measurement-setup side (wrong branch, missing token scope, tagging setup); it
-  never comments on whether a number is good or bad. The `report-writer` (the
-  subagent rendering the final reply) is responsible for this lookup.
+- The script diagnoses the repo's setup while it measures: whether the
+  credential can see the repo, whether `prod_branch` exists, whether there are
+  deploy markers and whether they match `tag_pattern` or the configured
+  `deploy_source`. Every problem found comes back in `issues` with its
+  remediation steps already attached, read from `references/troubleshooting.md`.
+  The `report-writer` renders each `message` **verbatim** with its steps
+  beneath — problems (impact `blocked`/`partial`) and notes (impact `none`)
+  under separate headings. It never looks anything up and never writes steps of
+  its own: an issue with `guidance: null` is reported as having no guidance.
+  These are process-gap signals this calibration stage is meant to expose, not
+  noise to hide, and the steps stay strictly on the measurement-setup side —
+  they never comment on whether a number is good or bad.
+- A repo the script could not measure at all comes back with `measured: false`
+  and no metric fields. Report it as such, with its problems — never omit the
+  repo or substitute a zero.
 - If the files were saved, say where they ended up (both the `.json` and the
   `.md`), in addition to reporting the values.
 
@@ -224,6 +229,10 @@ missing, it asks.
   merge (e.g. a pipeline that auto-tags), a PR can end up excluded or
   misattributed to the next interval. See the detail in the docstring of
   `scripts/dora_metrics.py`. Irrelevant with real cadences (days/weeks).
+- The setup diagnosis costs 2 extra REST calls per repo (`/repos` and
+  `/branches/{branch}`), plus 2 more only when a repo produced no deploy marker
+  and the script needs evidence to explain why. These are REST, not the Search
+  API that carries the low rate limit.
 
 ## Important notes
 
