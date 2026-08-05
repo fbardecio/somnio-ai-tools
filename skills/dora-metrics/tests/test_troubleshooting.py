@@ -114,10 +114,11 @@ class TestRealTroubleshootingFile(unittest.TestCase):
     def test_has_every_expected_code(self):
         self.assertEqual(set(self.guidance), EXPECTED_CODES)
 
-    def test_every_entry_has_what_and_where_to_fix(self):
+    def test_every_entry_has_all_three_subsections(self):
         for code, entry in self.guidance.items():
             with self.subTest(code=code):
                 self.assertTrue(entry["what"], f"{code} has no What")
+                self.assertTrue(entry["how_to_check"], f"{code} has no How to check")
                 self.assertTrue(entry["where_to_fix"], f"{code} has no Where to fix")
 
 

@@ -149,6 +149,16 @@ Available flags:
 - `--window-days N`: one-off override of the window in days. Does not modify
   the config.
 
+Exit code 1 does not mean the run failed: it means something could not be
+measured (`impact: blocked`), and the report was still produced — read it from
+stdout (or the saved files) and report it to the user exactly as Step 5
+describes, the same as any other problem. Do not treat a non-zero exit code
+from Bash as a reason to discard the output or tell the user the run failed.
+The only case that produces no report at all is a usage error — an unknown
+`--project`, `--branch` passed without `--project`, or an invalid
+`deploy_source` — which prints an error to stderr and exits 1 before anything
+is measured.
+
 `config/projects.json` field reference (also documented in `README.md` for a
 human opening the folder, but summarized here so this skill is self-contained
 even if only `SKILL.md` itself made it into an install):

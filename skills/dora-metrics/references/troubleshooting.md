@@ -269,8 +269,9 @@ the window, not a setup problem.
 
 Nothing to check. If you expected a deploy inside the window and the marker for
 it is missing, the relevant entries are `no_markers_matching_pattern` (the
-marker exists under a different name) or the tag-discipline section at the end
-of this file (the deploy happened but produced no marker).
+marker exists under a different name) or the "Setup check: Deployment Frequency
+count looks incomplete (tag/deploy discipline)" section in
+`references/troubleshooting.md` (the deploy happened but produced no marker).
 
 ### Where to fix
 
@@ -301,10 +302,11 @@ expected.
 
 Nothing to fix — this is not a setup problem. It resolves on its own once a
 second deploy exists to bound against. If instead you *expected* an earlier
-deploy to exist and be recognized, that points at a different entry: an earlier
-tag/release that does not match `tag_pattern` (check `config/projects.json` →
-`tag_pattern`, global or the repo's override) would not be seen, which can make a
-later deploy look like "the first".
+deploy to exist and be recognized, that points at the `no_markers_matching_pattern`
+entry in `references/troubleshooting.md`: an earlier tag/release that does not
+match `tag_pattern` (check `config/projects.json` → `tag_pattern`, global or the
+repo's override) would not be seen, which can make a later deploy look like "the
+first".
 
 ---
 
@@ -365,7 +367,7 @@ excludes that single PR. The other PRs in the interval are unaffected.
 
 - Token scope/access: use a `GITHUB_TOKEN` (or `gh auth login` session) with
   **read** access to that repo and to **all** the orgs of the project's repos.
-  See the `no_credential` entry above.
+  See the `no_credential` entry in `references/troubleshooting.md`.
 - Genuinely empty/unusual commit history: nothing to fix in config — this PR is
   correctly excluded because its first commit is unrecoverable.
 
@@ -399,7 +401,7 @@ happened.
   align the repo's release process so every prod deploy creates the configured
   marker.
 - Marker present but not matching: see the `no_markers_matching_pattern` entry
-  above.
+  in this file.
 
 This is purely a check on whether every deploy is *instrumented*. It does not
 comment on how often the repo deploys or whether that cadence is adequate — that
