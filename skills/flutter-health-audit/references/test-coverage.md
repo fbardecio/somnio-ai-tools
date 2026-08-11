@@ -36,6 +36,15 @@ capture only the summary. Full verbose test output floods the
 context window and is not needed for analysis. The actual coverage
 data is captured in lcov.info files on disk, not in stdout.
 
+IMPORTANT: Generated `.g.dart` files (produced by build_runner via
+json_serializable, freezed, injectable, etc.) are boilerplate, not
+hand-written logic under test. They are trivially "covered" or
+"uncovered" as a side effect of running any test that touches the
+generated class, which skews the percentage away from the actual
+test effort. Every lcov.info file is filtered to strip `.g.dart`
+records immediately after it is generated (Step 1b below), before
+any DA: line counts are taken for analysis or aggregation.
+
 ```bash
 # 1. Run tests in root app directory
 echo "Running tests in root app directory"
@@ -71,6 +80,21 @@ if [ -d "packages/" ]; then
     cd ../..
   done
 fi
+```
+
+Step 1b: Exclude Generated Files from Coverage Data
+Strip `.g.dart` records from every lcov.info produced above before
+counting any lines. lcov records are contiguous blocks starting at
+`SF:<path>` and ending at `end_of_record`; the awk filter drops the
+whole block when the `SF:` path ends in `.g.dart`, otherwise passes
+it through unchanged:
+
+```bash
+echo "Excluding .g.dart files from coverage data"
+find coverage/ -name "lcov.info" 2>/dev/null | while read -r lcov_file; do
+  awk '/^SF:/{skip=($0 ~ /\.g\.dart$/)} !skip' "$lcov_file" \
+    > "$lcov_file.tmp" && mv "$lcov_file.tmp" "$lcov_file"
+done
 ```
 
 MULTI-APP MONOREPO EXECUTION:
@@ -146,6 +170,18 @@ if [ -d "packages/" ]; then
     cd ../..
   done
 fi
+```
+
+Step 1b: Exclude Generated Files from Coverage Data
+Strip `.g.dart` records from every lcov.info produced above before
+counting any lines (same rationale as the single-app case above):
+
+```bash
+echo "Excluding .g.dart files from coverage data"
+find coverage/ -name "lcov.info" 2>/dev/null | while read -r lcov_file; do
+  awk '/^SF:/{skip=($0 ~ /\.g\.dart$/)} !skip' "$lcov_file" \
+    > "$lcov_file.tmp" && mv "$lcov_file.tmp" "$lcov_file"
+done
 ```
 
 Step 2: Analyze Coverage Results

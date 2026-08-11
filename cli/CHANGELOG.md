@@ -5,6 +5,12 @@ All notable changes to the Somnio CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.1] - 2026-08-11
+
+### Fixed
+
+- **`flutter-health-audit` no longer counts generated `.g.dart` files toward the coverage percentage.** Coverage was calculated from raw `lcov.info` `DA:` line counts across the app and every package, which included `build_runner`-generated files (`json_serializable`, `freezed`, `injectable`, etc.). Those files are boilerplate, not hand-written logic, and their trivial coverage status skewed the percentage away from actual test effort — feeding an invalid number into the overall project health score. Every `lcov.info` is now filtered to strip `.g.dart` records immediately after generation, before any line counts are taken for analysis or aggregation.
+
 ## [2.11.0] - 2026-08-05
 
 ### Added
