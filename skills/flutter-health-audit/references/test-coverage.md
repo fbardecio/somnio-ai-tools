@@ -45,17 +45,32 @@ test effort. Every lcov.info file is filtered to strip `.g.dart`
 records immediately after it is generated (Step 1b below), before
 any DA: line counts are taken for analysis or aggregation.
 
+IMPORTANT: Capture the repo root as an absolute path once, before any
+`cd`, and build every `--coverage-path` from that absolute root rather
+than a path relative to the current directory. Each package test runs
+with `cwd` inside that package's own directory (required for it to
+pick up the package's own `pubspec.yaml`/`test/`), so a
+repo-root-relative `--coverage-path` resolves to the wrong nested
+location (`packages/<name>/coverage/packages/<name>/lcov.info` instead
+of `<root>/coverage/packages/<name>/lcov.info`) and the aggregation
+step in Step 3 silently reads stale or missing data. Returning with
+`cd "$ROOT_DIR"` (absolute) rather than `cd ../..` (relative) also
+means one package's failure to return cleanly can never desync the
+directory math for every package that runs after it in the loop.
+
 ```bash
+ROOT_DIR="$(pwd)"
+
 # 1. Run tests in root app directory
 echo "Running tests in root app directory"
 if command -v fvm &> /dev/null && [ -f ".fvm/fvm_config.json" ]; then
   echo "Using FVM Flutter version"
   fvm flutter test --coverage --reporter=compact \
-    --coverage-path=coverage/app/lcov.info 2>&1 | tail -30
+    --coverage-path="$ROOT_DIR/coverage/app/lcov.info" 2>&1 | tail -30
 else
   echo "Using system Flutter version"
   flutter test --coverage --reporter=compact \
-    --coverage-path=coverage/app/lcov.info 2>&1 | tail -30
+    --coverage-path="$ROOT_DIR/coverage/app/lcov.info" 2>&1 | tail -30
 fi
 
 # 2. Run tests in all packages (if packages/ exists)
@@ -65,19 +80,19 @@ if [ -d "packages/" ]; then
     package_name=$(basename "$package_dir")
     echo "Running tests for package: $package_name"
 
-    cd "$package_dir"
+    cd "$ROOT_DIR/$package_dir"
 
     if command -v fvm &> /dev/null && [ -f ".fvm/fvm_config.json" ]; then
       fvm flutter test --coverage --reporter=compact \
-        --coverage-path=coverage/packages/$package_name/lcov.info \
+        --coverage-path="$ROOT_DIR/coverage/packages/$package_name/lcov.info" \
         2>&1 | tail -30
     else
       flutter test --coverage --reporter=compact \
-        --coverage-path=coverage/packages/$package_name/lcov.info \
+        --coverage-path="$ROOT_DIR/coverage/packages/$package_name/lcov.info" \
         2>&1 | tail -30
     fi
 
-    cd ../..
+    cd "$ROOT_DIR"
   done
 fi
 ```
@@ -101,23 +116,34 @@ MULTI-APP MONOREPO EXECUTION:
 Step 1: Run Tests with Coverage (Per App + All Packages)
 Execute the following commands in sequence:
 
+IMPORTANT: Same rule as the single-app case — capture the repo root
+as an absolute path once, before any `cd`, and build every
+`--coverage-path` from that absolute root. Always return with
+`cd "$ROOT_DIR"` (absolute), never a relative `cd ../..`, so one
+package or app failing to return cleanly can never desync the
+directory math — and therefore the coverage-path — for everything
+that runs after it in the loop, including across the nested
+app→app-packages levels below.
+
 ```bash
+ROOT_DIR="$(pwd)"
+
 # 1. Run tests for each app in apps/ directory
 for app_dir in apps/*/; do
   app_name=$(basename "$app_dir")
   echo "Running tests for app: $app_name"
 
-  cd "$app_dir"
+  cd "$ROOT_DIR/$app_dir"
 
   # Run tests in app directory
   if command -v fvm &> /dev/null && [ -f ".fvm/fvm_config.json" ]; then
     echo "Using FVM Flutter version for $app_name"
     fvm flutter test --coverage --reporter=compact \
-      --coverage-path=coverage/apps/$app_name/lcov.info 2>&1 | tail -30
+      --coverage-path="$ROOT_DIR/coverage/apps/$app_name/lcov.info" 2>&1 | tail -30
   else
     echo "Using system Flutter version for $app_name"
     flutter test --coverage --reporter=compact \
-      --coverage-path=coverage/apps/$app_name/lcov.info 2>&1 | tail -30
+      --coverage-path="$ROOT_DIR/coverage/apps/$app_name/lcov.info" 2>&1 | tail -30
   fi
 
   # Run tests in app-specific packages
@@ -128,24 +154,24 @@ for app_dir in apps/*/; do
       package_name=$(basename "$package_dir")
       echo "Running tests for app-specific package: $app_name/$package_name"
 
-      cd "$package_dir"
+      cd "$ROOT_DIR/$app_dir$package_dir"
 
       if command -v fvm &> /dev/null && \
         [ -f ".fvm/fvm_config.json" ]; then
         fvm flutter test --coverage --reporter=compact \
-          --coverage-path=coverage/apps/$app_name/packages/$package_name/lcov.info \
+          --coverage-path="$ROOT_DIR/coverage/apps/$app_name/packages/$package_name/lcov.info" \
           2>&1 | tail -30
       else
         flutter test --coverage --reporter=compact \
-          --coverage-path=coverage/apps/$app_name/packages/$package_name/lcov.info \
+          --coverage-path="$ROOT_DIR/coverage/apps/$app_name/packages/$package_name/lcov.info" \
           2>&1 | tail -30
       fi
 
-      cd ../..
+      cd "$ROOT_DIR"
     done
   fi
 
-  cd ../..
+  cd "$ROOT_DIR"
 done
 
 # 2. Run tests in shared packages (if root packages/ exists)
@@ -155,19 +181,19 @@ if [ -d "packages/" ]; then
     package_name=$(basename "$package_dir")
     echo "Running tests for shared package: $package_name"
 
-    cd "$package_dir"
+    cd "$ROOT_DIR/$package_dir"
 
     if command -v fvm &> /dev/null && [ -f ".fvm/fvm_config.json" ]; then
       fvm flutter test --coverage --reporter=compact \
-        --coverage-path=coverage/packages/$package_name/lcov.info \
+        --coverage-path="$ROOT_DIR/coverage/packages/$package_name/lcov.info" \
         2>&1 | tail -30
     else
       flutter test --coverage --reporter=compact \
-        --coverage-path=coverage/packages/$package_name/lcov.info \
+        --coverage-path="$ROOT_DIR/coverage/packages/$package_name/lcov.info" \
         2>&1 | tail -30
     fi
 
-    cd ../..
+    cd "$ROOT_DIR"
   done
 fi
 ```
@@ -587,28 +613,36 @@ COMMAND EXECUTION RULES
 ----------------------------------------------------------------------
 
 SINGLE APP EXECUTION:
-Always execute commands in this order:
+Always execute commands in this order (`ROOT_DIR="$(pwd)"` captured
+before step 1, every `--coverage-path` and every return `cd` built
+from it — see the ROOT_DIR rationale above; a repo-root-relative
+`--coverage-path` issued from inside a package directory resolves to
+the wrong nested location):
 1. flutter test --coverage --reporter=compact \
-   --coverage-path=coverage/app/lcov.info
+   --coverage-path="$ROOT_DIR/coverage/app/lcov.info"
    (or fvm flutter test --coverage --reporter=compact if FVM is
    configured)
-2. For each package in packages/: cd packages/<package_name> && \
-   flutter test --coverage --reporter=compact \
-   --coverage-path=coverage/packages/<package_name>/lcov.info
+2. For each package in packages/: cd "$ROOT_DIR/packages/<package_name>" \
+   && flutter test --coverage --reporter=compact \
+   --coverage-path="$ROOT_DIR/coverage/packages/<package_name>/lcov.info" \
+   && cd "$ROOT_DIR"
 3. Analysis commands for coverage data (app + packages)
 
 MULTI-APP EXECUTION:
-Always execute commands in this order:
-1. For each app: cd apps/<app_name> && flutter test --coverage \
+Always execute commands in this order (same `ROOT_DIR` rule as above):
+1. For each app: cd "$ROOT_DIR/apps/<app_name>" && flutter test --coverage \
    --reporter=compact \
-   --coverage-path=coverage/apps/<app_name>/lcov.info
+   --coverage-path="$ROOT_DIR/coverage/apps/<app_name>/lcov.info" \
+   && cd "$ROOT_DIR"
 2. For each app-specific package: \
-   cd apps/<app_name>/packages/<package_name> && \
+   cd "$ROOT_DIR/apps/<app_name>/packages/<package_name>" && \
    flutter test --coverage --reporter=compact \
-   --coverage-path=coverage/apps/<app_name>/packages/<package_name>/lcov.info
-3. For each shared package: cd packages/<package_name> && \
+   --coverage-path="$ROOT_DIR/coverage/apps/<app_name>/packages/<package_name>/lcov.info" \
+   && cd "$ROOT_DIR"
+3. For each shared package: cd "$ROOT_DIR/packages/<package_name>" && \
    flutter test --coverage --reporter=compact \
-   --coverage-path=coverage/packages/<package_name>/lcov.info
+   --coverage-path="$ROOT_DIR/coverage/packages/<package_name>/lcov.info" \
+   && cd "$ROOT_DIR"
 4. Analysis commands for coverage data per app and package
 5. Cross-app and cross-package analysis and aggregation
 
