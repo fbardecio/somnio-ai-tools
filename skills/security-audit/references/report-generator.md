@@ -140,12 +140,12 @@ Supply Chain Integrity - Start at 100, deduct:
 - Bonus: Verified checksums: +5
 
 Security Automation & CI/CD - Start at 0, add:
-- Dependabot configured: +20 (or Renovate: +15, take max)
+- Automated dependency updates configured (Dependabot / Renovate / GitLab Dependency Scanning / equivalent): +20
 - Snyk configured: +15
-- CI/CD vulnerability scanning: +20
-- CI runs on PRs: +10
+- CI/CD vulnerability scanning (any platform: GitHub Actions, GitLab CI, Bitbucket Pipelines): +20
+- CI runs on PRs/MRs (pull_request / merge_request / pull-requests triggers on any platform): +10
 - Pre-commit security hooks: +10
-- Lock file validation in CI: +10
+- Lock file validation in CI (npm ci / --frozen-lockfile / cargo --locked / equivalent on GitHub Actions, GitLab CI, or Bitbucket Pipelines): +10
 - Additional scanner (trivy/grype): +15
 - Cap at 100
 
@@ -182,8 +182,11 @@ Step A - Extract scoring data from each artifact:
     Gitleaks NOT_INSTALLED add recommendation to install Gitleaks
   - From step_05: Critical/High/Medium/Low CVE counts, outdated dep
     count, lock file status, SHA256 hashes, automated tooling
-    (Dependabot/Snyk/Renovate), CI/CD scanning, pre-commit security
-    hooks, git-sourced deps (GIT_SOURCED_COUNT/LIST),
+    (DepUpdate tool name: Dependabot/Renovate/GitLab DS/equivalent),
+    CI platform(s) detected, CI_SECURITY_SCANNING status,
+    CI_PR_TRIGGERS status, CI_LOCKFILE_VALIDATION status,
+    Snyk status, pre-commit security hooks,
+    git-sourced deps (GIT_SOURCED_COUNT/LIST),
     external path-based deps (PATH_EXTERNAL_COUNT/LIST — these are penalised),
     internal path-based deps (PATH_INTERNAL_COUNT/LIST — informational only, no penalty),
     registry sources
