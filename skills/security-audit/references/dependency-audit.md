@@ -30,6 +30,58 @@ fvm flutter pub outdated 2>/dev/null || flutter pub outdated 2>/dev/null \
 fvm flutter pub deps --style=compact 2>/dev/null | head -50 \
   || flutter pub deps --style=compact 2>/dev/null | head -50 \
   || echo "pub deps failed"
+
+# Classify path: and git: dependencies across all pubspec.yaml files
+echo ""
+echo "=== Path/Git Dependency Classification ==="
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+echo "Repo root: $REPO_ROOT"
+
+# Use Python to reliably parse YAML path: entries and classify them
+find . -name "pubspec.yaml" -not -path "*/.*" -not -path "*/build/*" 2>/dev/null | while IFS= read -r pubspec; do
+  PUBSPEC_DIR=$(dirname "$pubspec")
+  python3 - "$pubspec" "$PUBSPEC_DIR" "$REPO_ROOT" <<'PYEOF' 2>/dev/null
+import sys, os, re
+
+pubspec_path, pubspec_dir, repo_root = sys.argv[1], sys.argv[2], sys.argv[3]
+repo_root = os.path.realpath(repo_root)
+
+try:
+    content = open(pubspec_path).read()
+except:
+    sys.exit(0)
+
+current_pkg = None
+for line in content.splitlines():
+    pkg_match = re.match(r'^  (\S+):\s*$', line)
+    if pkg_match:
+        current_pkg = pkg_match.group(1)
+        continue
+    path_match = re.match(r'^\s+path:\s+(.+)$', line)
+    if path_match and current_pkg:
+        raw = path_match.group(1).strip().strip('"\'')
+        if os.path.isabs(raw):
+            resolved = os.path.realpath(raw)
+        else:
+            resolved = os.path.realpath(os.path.join(pubspec_dir, raw))
+        if resolved.startswith(repo_root):
+            print(f"PATH_INTERNAL|{current_pkg}|{raw}")
+        else:
+            print(f"PATH_EXTERNAL|{current_pkg}|{raw}")
+        current_pkg = None
+        continue
+    git_match = re.match(r'^\s+git:\s*$', line)
+    if git_match and current_pkg:
+        print(f"GIT_SOURCED|{current_pkg}")
+        current_pkg = None
+PYEOF
+done
+
+echo ""
+echo "Classification legend:"
+echo "  PATH_INTERNAL = path resolves inside repo root — in-repo/monorepo package, NOT a supply-chain risk"
+echo "  PATH_EXTERNAL = absolute path or resolves outside repo root — flag as supply-chain risk (-5 each)"
+echo "  GIT_SOURCED   = git-sourced dep — flag as supply-chain risk (-10 each)"
 ```
 
 NestJS/Node.js:
@@ -214,4 +266,11 @@ Output format:
 - Lock file integrity status
 - Automated security tooling status (Dependabot, Snyk, Renovate)
 - CI/CD security scanning status
+- Path dependency classification (Flutter/Dart and Node file: deps):
+  - PATH_INTERNAL_COUNT: [N] — in-repo/monorepo packages (NOT a supply-chain risk, do not penalise)
+  - PATH_INTERNAL_LIST: [package names] — informational only
+  - PATH_EXTERNAL_COUNT: [N] — absolute or out-of-repo paths (supply-chain risk, penalise -5 each)
+  - PATH_EXTERNAL_LIST: [package names with paths]
+  - GIT_SOURCED_COUNT: [N] — git-sourced deps (supply-chain risk, penalise -10 each)
+  - GIT_SOURCED_LIST: [package names]
 - Recommendations for improvement

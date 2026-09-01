@@ -125,7 +125,12 @@ Dependency Security - Start at 100, deduct:
 
 Supply Chain Integrity - Start at 100, deduct:
 - Git-sourced dependency: -10 per dep
-- Path-based dependency: -5 per dep
+- External path-based dependency: -5 per dep
+  (absolute paths, or relative paths that resolve outside the repository root)
+- Internal/in-repo path packages: 0 deduction
+  (relative path: entries that resolve inside the repository root or within the
+  same monorepo workspace — these are first-party packages, not a supply-chain risk;
+  report them as informational only under Key Findings with no severity tag)
 - No lock file: -25
 - Missing integrity hashes: -15
 - Unknown registry dependency: -20 per dep
@@ -178,7 +183,10 @@ Step A - Extract scoring data from each artifact:
   - From step_05: Critical/High/Medium/Low CVE counts, outdated dep
     count, lock file status, SHA256 hashes, automated tooling
     (Dependabot/Snyk/Renovate), CI/CD scanning, pre-commit security
-    hooks, git-sourced deps, path-based deps, registry sources
+    hooks, git-sourced deps (GIT_SOURCED_COUNT/LIST),
+    external path-based deps (PATH_EXTERNAL_COUNT/LIST — these are penalised),
+    internal path-based deps (PATH_INTERNAL_COUNT/LIST — informational only, no penalty),
+    registry sources
   - From step_06: outdated dep count (authoritative if more detailed
     than step_05), deprecated dep count, deprecated package list
   - From step_07: Trivy INSTALLED and used (apply +15 Security
