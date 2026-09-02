@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **`flutter-health-audit` no longer counts generated `.g.dart` files toward the coverage percentage.** Coverage was calculated from raw `lcov.info` `DA:` line counts across the app and every package, which included `build_runner`-generated files (`json_serializable`, `freezed`, `injectable`, etc.). Those files are boilerplate, not hand-written logic, and their trivial coverage status skewed the percentage away from actual test effort — feeding an invalid number into the overall project health score. Every `lcov.info` is now filtered to strip `.g.dart` records immediately after generation, before any line counts are taken for analysis or aggregation.
+- **`somnio run` Flutter pre-flight now excludes `.g.dart` files from coverage.** The health-audit *skill* already stripped generated files, but `somnio run` never executes that step — it substitutes a deterministic CLI pre-flight that parsed raw `lcov.info`. Packages with large generated models (Hive / json_serializable) were therefore reported well below CI (e.g. 68% vs 94%). `_parseLcovInfo` now skips `SF:` records whose path ends in `.g.dart`, matching `lcov --remove '**/*.g.dart'` in Bitbucket Pipelines.
 
 ## [2.11.0] - 2026-08-05
 
