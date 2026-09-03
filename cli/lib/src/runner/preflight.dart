@@ -321,7 +321,7 @@ class PreflightRunner {
     final lcov = File(p.join(cwd, 'coverage', 'lcov.info'));
     if (lcov.existsSync()) {
       coveragePhase.ok('coverage/lcov.info generated');
-      final lcovStats = _parseLcovInfo(lcov.path);
+      final lcovStats = parseLcovInfo(lcov.path);
       coveragePhase.info(
         'Root app coverage: ${lcovStats.percentage}% '
         '(${lcovStats.covered}/${lcovStats.total} lines, '
@@ -369,7 +369,7 @@ class PreflightRunner {
 
       final pkgLcov = File(p.join(dir, 'coverage', 'lcov.info'));
       if (pkgLcov.existsSync()) {
-        final stats = _parseLcovInfo(pkgLcov.path);
+        final stats = parseLcovInfo(pkgLcov.path);
         coveragePhase.info(
           '$label: ${stats.percentage}% coverage '
           '(${stats.covered}/${stats.total} lines), '
@@ -459,7 +459,7 @@ class PreflightRunner {
         // App lib
         final appLcov = File(p.join(appDir.path, 'coverage', 'lcov.info'));
         if (appLcov.existsSync()) {
-          final s = _parseLcovInfo(appLcov.path);
+          final s = parseLcovInfo(appLcov.path);
           totalLines += s.total;
           coveredLines += s.covered;
         }
@@ -470,7 +470,7 @@ class PreflightRunner {
           for (final ap in appPkgsDir.listSync().whereType<Directory>()) {
             final lf = File(p.join(ap.path, 'coverage', 'lcov.info'));
             if (lf.existsSync()) {
-              final s = _parseLcovInfo(lf.path);
+              final s = parseLcovInfo(lf.path);
               totalLines += s.total;
               coveredLines += s.covered;
             }
@@ -481,7 +481,7 @@ class PreflightRunner {
         for (final pkgPath in sharedPackageDirs) {
           final lf = File(p.join(pkgPath, 'coverage', 'lcov.info'));
           if (lf.existsSync()) {
-            final s = _parseLcovInfo(lf.path);
+            final s = parseLcovInfo(lf.path);
             totalLines += s.total;
             coveredLines += s.covered;
           }
@@ -498,14 +498,14 @@ class PreflightRunner {
     var coveredLines = 0;
     final rootLcov = File(p.join(cwd, 'coverage', 'lcov.info'));
     if (rootLcov.existsSync()) {
-      final s = _parseLcovInfo(rootLcov.path);
+      final s = parseLcovInfo(rootLcov.path);
       totalLines += s.total;
       coveredLines += s.covered;
     }
     for (final pkgPath in sharedPackageDirs) {
       final lf = File(p.join(pkgPath, 'coverage', 'lcov.info'));
       if (lf.existsSync()) {
-        final s = _parseLcovInfo(lf.path);
+        final s = parseLcovInfo(lf.path);
         totalLines += s.total;
         coveredLines += s.covered;
       }
@@ -730,7 +730,7 @@ class PreflightRunner {
     for (final path in lcovPaths) {
       final f = File(path);
       if (f.existsSync()) {
-        final s = _parseLcovInfo(path);
+        final s = parseLcovInfo(path);
         totalLines += s.total;
         coveredLines += s.covered;
       }
@@ -1095,10 +1095,15 @@ class PreflightRunner {
   }
 
   /// Parses an lcov.info file to extract coverage statistics.
-  _LcovStats _parseLcovInfo(String path) {
+  ///
+  /// Generated `.g.dart` records are skipped so the percentage matches
+  /// CI (`lcov --remove '**/*.g.dart'`) and the health-audit skill filter.
+  ///
+  /// Public for testing.
+  LcovStats parseLcovInfo(String path) {
     final file = File(path);
     if (!file.existsSync()) {
-      return const _LcovStats(
+      return const LcovStats(
         total: 0,
         covered: 0,
         percentage: 0,
@@ -1113,12 +1118,17 @@ class PreflightRunner {
     var zeroFileCount = 0;
     var currentFileTotal = 0;
     var currentFileCovered = 0;
+    var skipFile = false;
 
     for (final line in file.readAsLinesSync()) {
       if (line.startsWith('SF:')) {
+        skipFile = line.endsWith('.g.dart');
+        if (skipFile) continue;
         fileCount++;
         currentFileTotal = 0;
         currentFileCovered = 0;
+      } else if (skipFile) {
+        continue;
       } else if (line.startsWith('DA:')) {
         currentFileTotal++;
         totalLines++;
@@ -1140,7 +1150,7 @@ class PreflightRunner {
     final percentage =
         totalLines > 0 ? (coveredLines * 100 ~/ totalLines) : 0;
 
-    return _LcovStats(
+    return LcovStats(
       total: totalLines,
       covered: coveredLines,
       percentage: percentage,
@@ -1169,8 +1179,8 @@ class TestCounts {
 }
 
 /// Parsed lcov.info statistics.
-class _LcovStats {
-  const _LcovStats({
+class LcovStats {
+  const LcovStats({
     required this.total,
     required this.covered,
     required this.percentage,

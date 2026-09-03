@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:mason_logger/mason_logger.dart';
 import 'package:somnio/src/runner/preflight.dart';
 import 'package:test/test.dart';
@@ -138,5 +140,84 @@ void main() {
         expect(runner.isValidNodeVersion('18\n'), isFalse);
       },
     );
+  });
+
+  group('PreflightRunner.parseLcovInfo', () {
+    late PreflightRunner runner;
+    late Directory tmp;
+
+    setUp(() {
+      runner = PreflightRunner(logger: Logger(level: Level.quiet));
+      tmp = Directory.systemTemp.createTempSync('somnio-lcov-');
+    });
+
+    tearDown(() {
+      if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+    });
+
+    File writeLcov(String contents) {
+      final file = File('${tmp.path}/lcov.info')..writeAsStringSync(contents);
+      return file;
+    }
+
+    test('counts DA lines in handwritten files', () {
+      final file = writeLcov(
+        'SF:lib/src/vehicle.dart\n'
+        'DA:1,1\n'
+        'DA:2,1\n'
+        'end_of_record\n',
+      );
+
+      final stats = runner.parseLcovInfo(file.path);
+
+      expect(stats.total, 2);
+      expect(stats.covered, 2);
+      expect(stats.percentage, 100);
+      expect(stats.files, 1);
+    });
+
+    test('excludes .g.dart records from the percentage', () {
+      final file = writeLcov(
+        'SF:lib/src/vehicle.dart\n'
+        'DA:1,1\n'
+        'DA:2,1\n'
+        'end_of_record\n'
+        'SF:lib/src/vehicle.g.dart\n'
+        'DA:1,0\n'
+        'DA:2,0\n'
+        'DA:3,0\n'
+        'end_of_record\n',
+      );
+
+      final stats = runner.parseLcovInfo(file.path);
+
+      expect(stats.total, 2);
+      expect(stats.covered, 2);
+      expect(stats.percentage, 100);
+      expect(stats.files, 1);
+    });
+
+    test('does not count an uncovered .g.dart file as a zero-coverage file', () {
+      final file = writeLcov(
+        'SF:lib/src/vehicle.g.dart\n'
+        'DA:1,0\n'
+        'end_of_record\n',
+      );
+
+      final stats = runner.parseLcovInfo(file.path);
+
+      expect(stats.total, 0);
+      expect(stats.files, 0);
+      expect(stats.zeroFiles, 0);
+      expect(stats.percentage, 0);
+    });
+
+    test('returns zeroes when the file is missing', () {
+      final stats = runner.parseLcovInfo('${tmp.path}/missing.info');
+
+      expect(stats.total, 0);
+      expect(stats.covered, 0);
+      expect(stats.percentage, 0);
+    });
   });
 }
