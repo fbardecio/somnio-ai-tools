@@ -5,6 +5,13 @@ All notable changes to the Somnio CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.2] - 2026-09-03
+
+### Fixed
+
+- **`security-audit` no longer penalizes internal monorepo `path:` dependencies in the supply-chain score.** Workspace packages that resolve inside the repo were treated like unpinned external path/git deps, so multi-package Flutter/Dart monorepos took an undeserved supply-chain hit. Path deps are now classified as internal (inside the repo root) or external; only external path deps and `git:` deps count toward that penalty.
+- **`flutter-health-audit` writes coverage reports to absolute repo-root paths.** Relative `--coverage-path` values were resolved from the package directory after `cd`, so monorepo package runs wrote `lcov.info` under nested paths (`packages/<name>/coverage/packages/<name>/lcov.info`) and aggregation missed them. Every `--coverage-path` is now built from an absolute repo root captured before any `cd`.
+
 ## [2.11.1] - 2026-08-11
 
 ### Fixed
