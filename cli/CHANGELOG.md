@@ -5,6 +5,12 @@ All notable changes to the Somnio CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **The project segment of every report file name is now the git repository name.** It used to be the current directory name, so the same repo produced different file names depending on what the checkout folder was called, whether the audit ran from a linked worktree (named after the branch), or from a monorepo subdirectory (`packages/api` → `api`). It is now read from the `origin` remote URL (`git@github.com:somnio/hoopis-backend.git` → `hoopis-backend`). Without an `origin` remote it falls back to the main checkout's directory, via `git rev-parse --git-common-dir`, so worktrees and subdirectories still resolve to the repo; outside a git repo it is the current directory name, as before. `--project-name` still overrides it. Applies to `somnio run` (new `resolveRepoName` in `cli/lib/src/utils/repo_name.dart`) and to the shell snippet every audit skill and `/quick-check` use when they run outside the CLI, so both paths produce the same name. The `<YYYY-MM-DD>-<project>-<audit>.md` shape is unchanged.
+
 ## [3.0.0] - 2026-09-21
 
 This is a major release because the shape of what several skills produce changed.
