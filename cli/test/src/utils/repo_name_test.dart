@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
 import 'package:somnio/src/utils/repo_name.dart';
 import 'package:test/test.dart';
 
@@ -46,6 +49,52 @@ void main() {
         }),
       );
       expect(name, 'hoopis-backend');
+    });
+  });
+
+  group('resolveRepoName with real git', () {
+    late Directory tmp;
+
+    setUp(() => tmp = Directory.systemTemp.createTempSync('repo_name_test'));
+    tearDown(() => tmp.deleteSync(recursive: true));
+
+    Future<void> git(List<String> args, String dir) async {
+      final result = await Process.run('git', args, workingDirectory: dir);
+      expect(result.exitCode, 0, reason: '${result.stderr}');
+    }
+
+    test('reads the origin remote', () async {
+      final repo = p.join(tmp.path, 'checkout-dir');
+      Directory(repo).createSync();
+      await git(['init', '-q'], repo);
+      await git(
+        ['remote', 'add', 'origin', 'git@github.com:org/hoopis-backend.git'],
+        repo,
+      );
+      expect(await resolveRepoName(repo), 'hoopis-backend');
+    });
+
+    test('uses the checkout directory when there is no origin', () async {
+      final repo = p.join(tmp.path, 'hoopis-backend');
+      final sub = p.join(repo, 'packages', 'api');
+      Directory(sub).createSync(recursive: true);
+      await git(['init', '-q'], repo);
+      expect(await resolveRepoName(sub), 'hoopis-backend');
+    });
+
+    test('uses the directory name outside a git repo', () async {
+      // The system temp dir may itself sit inside a repo on some machines;
+      // GIT_CEILING_DIRECTORIES is not settable per call here, so only
+      // assert when git agrees there is no repository.
+      final dir = p.join(tmp.path, 'plain-dir');
+      Directory(dir).createSync();
+      final probe = await Process.run(
+        'git',
+        ['rev-parse', '--git-dir'],
+        workingDirectory: dir,
+      );
+      if (probe.exitCode == 0) return;
+      expect(await resolveRepoName(dir), 'plain-dir');
     });
   });
 }
