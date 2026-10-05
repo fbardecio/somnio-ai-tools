@@ -26,6 +26,12 @@ class SetupCommand extends Command<int> {
         help: 'Skip prompts and auto-approve all steps.',
       )
       ..addFlag(
+        'yes',
+        abbr: 'y',
+        help: 'Same as --force.',
+        negatable: false,
+      )
+      ..addFlag(
         'skip-cli',
         help: 'Skip CLI detection and installation.',
       )
@@ -60,7 +66,8 @@ class SetupCommand extends Command<int> {
 
   @override
   Future<int> run() async {
-    final force = argResults!['force'] as bool;
+    final force =
+        (argResults!['force'] as bool) || (argResults!['yes'] as bool);
     final skipCli = argResults!['skip-cli'] as bool;
     final verbose = argResults!['verbose'] as bool;
 

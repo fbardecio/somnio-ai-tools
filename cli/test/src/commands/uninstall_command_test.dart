@@ -12,6 +12,11 @@ void _writeFile(String path, [String contents = 'x']) {
   File(path).writeAsStringSync(contents);
 }
 
+/// Writes a Somnio-style `<dir>/SKILL.md` whose frontmatter names [name].
+void _writeSkill(String dir, String name) {
+  _writeFile(p.join(dir, name, 'SKILL.md'), '---\nname: $name\n---\n');
+}
+
 void main() {
   group('removeAgentInstalls', () {
     late Directory home;
@@ -52,7 +57,7 @@ void main() {
         'dart-model-from-json',
         'optimize-claude-config',
       ]) {
-        _writeFile(p.join(home.path, '.claude', 'skills', name, 'SKILL.md'));
+        _writeSkill(p.join(home.path, '.claude', 'skills'), name);
       }
 
       removeAgentInstalls(home: home.path, environment: const {});
@@ -73,7 +78,7 @@ void main() {
 
     test('removes legacy v1.x Claude skills including somnio-rh/somnio-rp', () {
       for (final name in const ['somnio-fh', 'somnio-rh', 'somnio-rp']) {
-        _writeFile(p.join(home.path, '.claude', 'skills', name, 'SKILL.md'));
+        _writeSkill(p.join(home.path, '.claude', 'skills'), name);
       }
 
       removeAgentInstalls(home: home.path, environment: const {});
@@ -87,20 +92,79 @@ void main() {
       }
     });
 
-    test('removes Claude symlinks left by the skills.sh installer', () {
+    test('keeps a same-named symlink pointing outside the location', () {
       final target = Directory(p.join(home.path, 'src', 'security-audit'))
         ..createSync(recursive: true);
       final skillsDir = Directory(p.join(home.path, '.claude', 'skills'))
         ..createSync(recursive: true);
-      Link(p.join(skillsDir.path, 'security-audit')).createSync(target.path);
+      final link = Link(p.join(skillsDir.path, 'security-audit'))
+        ..createSync(target.path);
+      final warnings = <String>[];
+
+      removeAgentInstalls(
+        home: home.path,
+        environment: const {},
+        onWarning: warnings.add,
+      );
+
+      expect(link.existsSync(), isTrue);
+      expect(warnings, [contains('outside')]);
+    });
+
+    test('removes a same-named symlink resolving inside the location', () {
+      final skillsDir = p.join(home.path, '.claude', 'skills');
+      _writeSkill(skillsDir, 'old-copy');
+      final link = Link(p.join(skillsDir, 'security-audit'))
+        ..createSync('old-copy');
+
+      removeAgentInstalls(home: home.path, environment: const {});
+
+      expect(link.existsSync(), isFalse);
+      expect(
+        File(p.join(skillsDir, 'old-copy', 'SKILL.md')).existsSync(),
+        isTrue,
+        reason: 'only the link is removed, never its target',
+      );
+    });
+
+    test('keeps a same-named directory that is not a Somnio install', () {
+      final skillsDir = p.join(home.path, '.claude', 'skills');
+      _writeFile(
+        p.join(skillsDir, 'security-audit', 'SKILL.md'),
+        '---\nname: my-security-audit\n---\n',
+      );
+      _writeFile(p.join(skillsDir, 'git-commit-format', 'notes.md'));
+      final warnings = <String>[];
+
+      removeAgentInstalls(
+        home: home.path,
+        environment: const {},
+        onWarning: warnings.add,
+      );
+
+      expect(
+        Directory(p.join(skillsDir, 'security-audit')).existsSync(),
+        isTrue,
+      );
+      expect(
+        Directory(p.join(skillsDir, 'git-commit-format')).existsSync(),
+        isTrue,
+      );
+      expect(warnings, hasLength(2));
+    });
+
+    test('skips the name sweep where a manifest records the install', () {
+      final skillsDir = p.join(home.path, '.claude', 'skills');
+      _writeSkill(skillsDir, 'flutter-health-audit');
+      _writeFile(p.join(skillsDir, '.somnio-skills.json'), '{}');
 
       removeAgentInstalls(home: home.path, environment: const {});
 
       expect(
-        Link(p.join(skillsDir.path, 'security-audit')).existsSync(),
-        isFalse,
+        Directory(p.join(skillsDir, 'flutter-health-audit')).existsSync(),
+        isTrue,
+        reason: 'not in the manifest, so not ours',
       );
-      expect(target.existsSync(), isTrue, reason: 'symlink target is not ours');
     });
 
     test('removes Somnio skills recorded in the skills.sh lock', () {
@@ -239,9 +303,7 @@ void main() {
         reason: 'nothing installed under an empty home',
       );
 
-      _writeFile(
-        p.join(home.path, '.claude', 'skills', 'security-audit', 'SKILL.md'),
-      );
+      _writeSkill(p.join(home.path, '.claude', 'skills'), 'security-audit');
 
       expect(removeAgentInstalls(home: home.path, environment: const {}), isTrue);
     });
@@ -274,6 +336,37 @@ void main() {
         )
         ..save();
     }
+
+    group('with a manifest at the global location', () {
+      late String skillsDir;
+
+      setUp(() {
+        seedClaudeSkill(home.path, 'security-audit');
+        skillsDir = p.join(home.path, '.claude', 'skills');
+        // Third-party skill sharing a Somnio skill's name, not in the manifest.
+        _writeSkill(skillsDir, 'flutter-health-audit');
+
+        removeAgentInstalls(home: home.path, environment: const {});
+        removeManifestTrackedInstalls(
+          home: home.path,
+          projectRoot: project.path,
+        );
+      });
+
+      test('keeps a same-named skill the manifest does not record', () {
+        expect(
+          Directory(p.join(skillsDir, 'flutter-health-audit')).existsSync(),
+          isTrue,
+        );
+      });
+
+      test('removes the skill the manifest records', () {
+        expect(
+          Directory(p.join(skillsDir, 'security-audit')).existsSync(),
+          isFalse,
+        );
+      });
+    });
 
     test('removes a project-scoped install the home sweep cannot reach', () {
       seedClaudeSkill(project.path, 'security-audit');

@@ -16,6 +16,7 @@ import '../installers/skills_sh_cleaner.dart';
 import '../utils/package_resolver.dart';
 import '../utils/platform_utils.dart';
 import '../utils/prompts.dart';
+import '../utils/yaml_frontmatter.dart';
 
 /// Uninstalls the somnio CLI itself, optionally taking the installed skills
 /// and rules with it.
@@ -38,6 +39,12 @@ class UninstallCommand extends Command<int> {
         help: 'Skip confirmation prompts.',
       )
       ..addFlag(
+        'yes',
+        abbr: 'y',
+        help: 'Same as --force.',
+        negatable: false,
+      )
+      ..addFlag(
         'verbose',
         abbr: 'v',
         help: 'Show each removed file.',
@@ -47,6 +54,11 @@ class UninstallCommand extends Command<int> {
 
   final Logger _logger;
   bool _verbose = false;
+
+  /// `--verbose` output and warnings gathered while the removal spinner is
+  /// running, printed once it has stopped so lines never interleave with it.
+  final _verboseLines = <String>[];
+  final _warnings = <String>[];
 
   @override
   String get name => 'uninstall';
@@ -63,7 +75,8 @@ class UninstallCommand extends Command<int> {
 
   @override
   Future<int> run() async {
-    final force = argResults!['force'] as bool;
+    final force =
+        (argResults!['force'] as bool) || (argResults!['yes'] as bool);
     _verbose = argResults!['verbose'] as bool;
     final skillsFlag = argResults!['skills'] as bool?;
 
@@ -109,8 +122,8 @@ class UninstallCommand extends Command<int> {
 
       var removedAnything = removeAgentInstalls(
         home: PlatformUtils.homeDirectory,
-        onRemoved: _verbose ? _logger.info : null,
-        onWarning: _logger.warn,
+        onRemoved: _verbose ? _verboseLines.add : null,
+        onWarning: _warnings.add,
       );
 
       // Covers what the home-scoped sweep above cannot: project-scoped
@@ -118,7 +131,7 @@ class UninstallCommand extends Command<int> {
       removedAnything |= removeManifestTrackedInstalls(
         home: PlatformUtils.homeDirectory,
         projectRoot: Directory.current.path,
-        onRemoved: _verbose ? _logger.info : null,
+        onRemoved: _verbose ? _verboseLines.add : null,
       );
 
       // Remove agent rules (installed via `somnio rules install`)
@@ -129,6 +142,8 @@ class UninstallCommand extends Command<int> {
       } else {
         removeProgress.complete('No skills or rules found');
       }
+      _verboseLines.forEach(_logger.info);
+      _warnings.forEach(_logger.warn);
     } else {
       _logger.info(
         'Keeping installed skills — remove them later by reinstalling the '
@@ -280,7 +295,7 @@ class UninstallCommand extends Command<int> {
         stackDir.deleteSync();
       }
       if (_verbose) {
-        _logger.info('  Removed ${rule.displayName} $stack rules');
+        _verboseLines.add('  Removed ${rule.displayName} $stack rules');
       }
       removed = true;
     }
@@ -317,14 +332,14 @@ class UninstallCommand extends Command<int> {
     if (remaining.isEmpty) {
       file.deleteSync();
       if (_verbose) {
-        _logger.info(
+        _verboseLines.add(
           '  Removed ${rule.displayName} rules: ${p.basename(filePath)}',
         );
       }
     } else {
       file.writeAsStringSync('$remaining\n');
       if (_verbose) {
-        _logger.info(
+        _verboseLines.add(
           '  Stripped Somnio rules block from ${p.basename(filePath)}',
         );
       }
@@ -343,7 +358,7 @@ class UninstallCommand extends Command<int> {
       if (!p.basename(entity.path).startsWith('somnio-')) continue;
       entity.deleteSync();
       if (_verbose) {
-        _logger.info(
+        _verboseLines.add(
           '  Removed ${rule.displayName} rule: ${p.relative(entity.path, from: dirPath)}',
         );
       }
@@ -360,8 +375,9 @@ class UninstallCommand extends Command<int> {
 /// Every agent is dispatched from this one loop, so the set of agents needing
 /// bespoke handling can never drift out of sync with the set the generic
 /// cleanup covers. [_removeGenericInstall] handles any agent whose content
-/// lives directly under its registered `installPath`; only the two agents that
-/// write outside it need their own remover.
+/// lives directly under its registered `installPath` (by name, and only for
+/// locations without a manifest); only Antigravity, which also writes into
+/// `global_workflows/`, needs its own remover.
 ///
 /// Somnio skills installed by skills.sh are removed first through
 /// [SkillsShCleaner], so only lock-owned Somnio entries go and their agent
@@ -384,6 +400,7 @@ bool removeAgentInstalls({
   final skillsShPaths = [
     ...skillsSh.unlinkedLinks,
     ...skillsSh.deletedCanonicals,
+    ...skillsSh.removedDirectories,
   ];
   for (final path in skillsShPaths) {
     onRemoved?.call('  Removed skills.sh copy: $path');
@@ -393,12 +410,10 @@ bool removeAgentInstalls({
 
   for (final agent in AgentRegistry.installableAgents) {
     removed |= switch (agent.id) {
-      // Also removes leftover links named after a Somnio skill.
-      'claude' => _removeClaudeInstall(home, onRemoved),
       // Workflows live one level down, in global_workflows/.
-      'antigravity' => _removeAntigravityInstall(home, onRemoved) |
-          _removeGenericInstall(agent, home, onRemoved),
-      _ => _removeGenericInstall(agent, home, onRemoved),
+      'antigravity' => _removeAntigravityInstall(agent, home, onRemoved) |
+          _removeGenericInstall(agent, home, onRemoved, onWarning),
+      _ => _removeGenericInstall(agent, home, onRemoved, onWarning),
     };
   }
 
@@ -488,40 +503,18 @@ bool _deleteEntity(String path) {
   return false;
 }
 
-bool _removeClaudeInstall(String home, void Function(String)? onRemoved) {
-  final names = InstalledSkillNames.all;
+bool _removeAntigravityInstall(
+  AgentConfig agent,
+  String home,
+  void Function(String)? onRemoved,
+) {
+  final baseDir = agent.resolvedInstallPath(home: home);
   var removed = false;
 
-  final globalDir = Directory(p.join(home, '.claude', 'skills'));
-  if (globalDir.existsSync()) {
-    for (final name in names) {
-      // Remove directories (built-in installer)
-      final dir = Directory(p.join(globalDir.path, name));
-      if (dir.existsSync()) {
-        dir.deleteSync(recursive: true);
-        onRemoved?.call('  Removed Claude skill: $name');
-        removed = true;
-      }
-      // Remove symlinks (skills.sh installer)
-      final link = Link(p.join(globalDir.path, name));
-      if (link.existsSync()) {
-        link.deleteSync();
-        onRemoved?.call('  Removed Claude symlink: $name');
-        removed = true;
-      }
-    }
-  }
-
-  return removed;
-}
-
-bool _removeAntigravityInstall(String home, void Function(String)? onRemoved) {
-  final baseDir = p.join(home, '.gemini', 'antigravity');
-  var removed = false;
-
-  // Remove workflow files
+  // Remove workflow files — unless a manifest records exactly which ones
+  // somnio wrote, in which case removeManifestTrackedInstalls handles them.
   final workflowsDir = Directory(p.join(baseDir, 'global_workflows'));
-  if (workflowsDir.existsSync()) {
+  if (!_hasManifest(baseDir) && workflowsDir.existsSync()) {
     final files = workflowsDir
         .listSync()
         .whereType<File>()
@@ -547,32 +540,97 @@ bool _removeAntigravityInstall(String home, void Function(String)? onRemoved) {
   return removed;
 }
 
+/// Removes somnio content from [agent]'s global install directory by name,
+/// for installs that predate the `.somnio-skills.json` manifest, plus the
+/// agent's somnio-owned execution rules.
+///
+/// A location that has a manifest is not swept by name at all:
+/// [removeManifestTrackedInstalls] deletes exactly what it records, so a
+/// third-party entry that merely shares a Somnio skill's name survives.
+/// Without a manifest, an entry named like a Somnio skill is removed only
+/// when it looks like a Somnio install (see [_legacyKeepReason]); anything
+/// else is kept and reported to [onWarning]. Links are never followed.
 bool _removeGenericInstall(
   AgentConfig agent,
   String home,
   void Function(String)? onRemoved,
+  void Function(String)? onWarning,
 ) {
-  final dir = Directory(agent.resolvedInstallPath(home: home));
+  final location = agent.resolvedInstallPath(home: home);
+  final dir = Directory(location);
 
   var removed = false;
-  if (dir.existsSync()) {
-    for (final entity in dir.listSync()) {
-      if (InstalledSkillNames.matches(agent, p.basename(entity.path))) {
-        if (entity is File) {
-          entity.deleteSync();
-        } else if (entity is Directory) {
-          entity.deleteSync(recursive: true);
-        }
-        onRemoved?.call(
-          '  Removed ${agent.displayName}: ${p.basename(entity.path)}',
-        );
-        removed = true;
+  if (dir.existsSync() && !_hasManifest(location)) {
+    for (final entity in dir.listSync(followLinks: false)) {
+      final name = p.basename(entity.path);
+      if (!InstalledSkillNames.matches(agent, name)) continue;
+
+      final keepReason = _legacyKeepReason(entity, location, name);
+      if (keepReason != null) {
+        onWarning?.call('Kept ${entity.path}: $keepReason.');
+        continue;
       }
+      if (entity is Directory) {
+        entity.deleteSync(recursive: true);
+      } else {
+        entity.deleteSync();
+      }
+      onRemoved?.call('  Removed ${agent.displayName}: $name');
+      removed = true;
     }
   }
 
   removed |= _removeExecutionRulesFor(agent, home, onRemoved);
   return removed;
+}
+
+/// Whether [location] has a `.somnio-skills.json` manifest.
+bool _hasManifest(String location) =>
+    File(p.join(location, SkillManifest.fileName)).existsSync();
+
+/// Why a pre-manifest entry named like the Somnio skill [name] must be kept,
+/// or `null` when it looks like a Somnio install and may be removed.
+///
+/// - A symlink is removed (only the link) when it resolves inside
+///   [location]; one pointing outside is not somnio's to touch.
+/// - A directory must hold a `SKILL.md` whose frontmatter `name` is [name].
+/// - A plain file is removed: the installer writes those under the exact
+///   Somnio name and they carry no marker to check.
+String? _legacyKeepReason(
+  FileSystemEntity entity,
+  String location,
+  String name,
+) {
+  if (entity is Link) {
+    final String target;
+    try {
+      target = entity.targetSync();
+    } on FileSystemException catch (e) {
+      return 'its link target could not be read (${e.message})';
+    }
+    final resolved = p.normalize(
+      p.isAbsolute(target) ? target : p.join(location, target),
+    );
+    return p.isWithin(location, resolved)
+        ? null
+        : 'it is a symlink to $target, outside $location';
+  }
+  if (entity is Directory) {
+    final skillFile = File(p.join(entity.path, 'SKILL.md'));
+    if (!skillFile.existsSync()) {
+      return 'it has no SKILL.md identifying it as the Somnio skill $name';
+    }
+    final String content;
+    try {
+      content = skillFile.readAsStringSync();
+    } on FileSystemException catch (e) {
+      return 'its SKILL.md could not be read (${e.message})';
+    }
+    return frontmatterName(content) == name
+        ? null
+        : 'its SKILL.md does not name the Somnio skill $name';
+  }
+  return null;
 }
 
 /// Removes the somnio-owned execution rules directory written by

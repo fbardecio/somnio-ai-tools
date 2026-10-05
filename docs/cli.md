@@ -79,6 +79,7 @@ somnio setup --force      # Skip all prompts, including the skills.sh cleanup
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--force` | `-f` | Skip all confirmation prompts |
+| `--yes` | `-y` | Same as `--force` |
 | `--skip-cli` | | Skip CLI detection and installation |
 | `--verbose` | `-v` | Show detailed output, including every skills.sh path removed |
 
@@ -206,7 +207,7 @@ Refresh already-installed skills in place, overwriting them with the shipped ver
 somnio skills update                # refresh everything installed
 somnio skills update --agent claude # refresh only Claude Code
 somnio skills update --verbose
-somnio skills update --dry-run --verbose   # show the skills.sh cleanup plan only
+somnio skills update --dry-run --verbose   # show the cleanup plan and what would be refreshed
 ```
 
 | Flag | Short | Description |
@@ -214,7 +215,9 @@ somnio skills update --dry-run --verbose   # show the skills.sh cleanup plan onl
 | `--agent` | `-a` | Limit the refresh to a single agent |
 | `--verbose` | `-v` | Show the install directory for each refreshed location and every skills.sh link path in the cleanup plan |
 | `--yes` | `-y` | Remove Somnio skills installed by skills.sh without asking |
-| `--dry-run` | | Print the skills.sh cleanup plan and exit without removing or refreshing anything |
+| `--dry-run` | | Print the skills.sh cleanup plan and what would be refreshed (agent, scope, location, skill names), then exit without removing or refreshing anything |
+
+When run from the home directory, the project scope is the global folder; that location is refreshed once, as global.
 
 `update` only reinstalls what the discovered manifests cover. Any skills.sh skill outside them is listed as **"will be removed and NOT reinstalled"** (also with `--yes` and in `--dry-run`), and the cleanup prompt then defaults to *no*. Run `somnio skills install` afterwards to get those back.
 
@@ -254,6 +257,7 @@ Safety rules:
 - A Somnio entry whose folder name (after skills.sh's name sanitising) is shared with a third-party lock entry is skipped entirely, as is one whose canonical `SKILL.md` declares a different `name`. Their lock entries are kept and a warning is shown.
 - Agent folders that are themselves symlinks (e.g. `~/.claude` → `~/dotfiles/claude`) are handled: links are matched both as written and at the folder's real path. If `~/.agents/skills` is itself a symlink, the canonical copy is removed at its real location. A symlinked lock file is rewritten at its target and the symlink is kept.
 - What gets removed is exactly the plan that was shown: every item is re-checked right before removal, and anything that changed in between is skipped with a warning.
+- An agent skill folder (e.g. `~/.augment/skills`) left empty by the unlinking is removed too, non-recursively — never its parents, a folder with anything else in it, or `~/.agents/skills`. The plan says how many ("N empty agent skill folders will be removed"; `--verbose` lists them). Otherwise those empty folders, which skills.sh creates for agents you may not use, would make the agents look installed. Agent detection also ignores empty install folders.
 
 The commands list what will be removed (skills, canonical copies, number of links), flag any skill the command will not reinstall, and ask before removing anything. The question states that the removal is global, across all agents; it defaults to *yes* unless some skill would not be reinstalled. `--yes` (`--force` for `setup`) skips the question — the not-reinstalled list is still printed. Without a terminal to ask on and without that flag, the cleanup is skipped with a warning; declining also skips it. Either way the install or update then continues normally. `--dry-run` (on `skills install` and `skills update`) only prints the plan — with `--verbose`, every link path — and exits without removing or installing anything.
 
@@ -289,9 +293,10 @@ somnio uninstall --force      # Skip the confirmation prompt
 |------|-------|-------------|
 | `--skills` / `--no-skills` | | Answer the skills question up front instead of being prompted |
 | `--force` | `-f` | Skip the confirmation prompt |
-| `--verbose` | `-v` | Show each removed file |
+| `--yes` | `-y` | Same as `--force` |
+| `--verbose` | `-v` | Show each removed file (printed once removal finishes) |
 
-When skills are removed it clears the global installs, the current project's installs, the `.somnio-skills.json` manifests, and the agent rules installed by `somnio rules install`. Somnio skills installed by skills.sh are removed through the same [cleanup](#cleanup-of-skillssh-installs) as the install commands, so only entries the skills.sh lock attributes to this repo go from `~/.agents/skills`, together with their agent links and lock entries. Deactivating a CLI that was not installed through `dart pub global` is treated as a no-op, not an error.
+When skills are removed it clears the global installs, the current project's installs, the `.somnio-skills.json` manifests, and the agent rules installed by `somnio rules install`. Where a manifest exists, only what it records is removed — a skill of someone else's that shares a Somnio skill's name is kept. For older installs without a manifest, an entry named like a Somnio skill is removed only if it looks like a Somnio install (a folder whose `SKILL.md` frontmatter `name` matches, a symlink pointing inside the folder, or a plain file); anything else is kept with a warning. Somnio skills installed by skills.sh are removed through the same [cleanup](#cleanup-of-skillssh-installs) as the install commands, so only entries the skills.sh lock attributes to this repo go from `~/.agents/skills`, together with their agent links and lock entries. Deactivating a CLI that was not installed through `dart pub global` is treated as a no-op, not an error.
 
 > To remove skills without removing the CLI, use [`somnio skills remove`](#somnio-skills-remove) instead.
 

@@ -1,3 +1,5 @@
+import 'package:yaml/yaml.dart';
+
 /// Emits [text] as the body of a YAML `>-` folded block: whitespace
 /// collapsed, wrapped at ~76 columns, every line indented two spaces.
 ///
@@ -44,4 +46,21 @@ String yamlInlineScalar(String text) {
       RegExp('^[-?:,\\[\\]{}#&*!|>\'"%@`]').hasMatch(v);
   if (!needsQuote) return v;
   return "'${v.replaceAll("'", "''")}'";
+}
+
+/// The `name` field of a markdown file's YAML frontmatter, or `null` when
+/// [content] has no frontmatter, no string `name`, or invalid YAML.
+String? frontmatterName(String content) {
+  final match =
+      RegExp(r'^\uFEFF?---\r?\n([\s\S]*?)\r?\n---').firstMatch(content);
+  if (match == null) return null;
+  try {
+    final yaml = loadYaml(match.group(1)!);
+    if (yaml is YamlMap && yaml['name'] is String) {
+      return yaml['name'] as String;
+    }
+  } on YamlException {
+    // Unparseable frontmatter is treated like a missing name.
+  }
+  return null;
 }

@@ -77,8 +77,8 @@ SkillsShCleanupResult? runSkillsShCleanup({
   logger
     ..info('')
     ..info(
-      'These copies are not tracked by Somnio, so "somnio skills update" '
-      'never refreshes them.',
+      'skills.sh copies of Somnio skills are not managed by the somnio CLI '
+      'and go stale.',
     );
   final notReinstalled = reinstalled == null
       ? const <SkillsShSkillPlan>[]
@@ -108,7 +108,11 @@ SkillsShCleanupResult? runSkillsShCleanup({
 
   final result = cleaner.apply(plan);
   if (verbose) {
-    for (final path in [...result.unlinkedLinks, ...result.deletedCanonicals]) {
+    for (final path in [
+      ...result.unlinkedLinks,
+      ...result.deletedCanonicals,
+      ...result.removedDirectories,
+    ]) {
       logger.info('  Removed: $path');
     }
   }
@@ -118,7 +122,8 @@ SkillsShCleanupResult? runSkillsShCleanup({
     ..success(
       'Removed ${result.removedSkills.length} Somnio skill(s) installed by '
       'skills.sh (${result.unlinkedLinks.length} link(s), $copies canonical '
-      '${copies == 1 ? 'copy' : 'copies'}).',
+      '${copies == 1 ? 'copy' : 'copies'}, '
+      '${result.removedDirectories.length} empty folder(s)).',
     )
     ..info('');
   return result;

@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:yaml/yaml.dart';
 
 import '../utils/platform_utils.dart';
+import '../utils/yaml_frontmatter.dart';
 
 /// The skills.sh `source` value of every skill installed from this repo.
 const somnioSkillsShSource = 'somnio-software/somnio-ai-tools';
@@ -197,6 +197,7 @@ class SkillsShCleanupPlan {
     required this.lockPath,
     this.skills = const [],
     this.warnings = const [],
+    this.emptiedDirectories = const [],
   });
 
   /// The skills.sh global lock file this plan was read from.
@@ -208,6 +209,12 @@ class SkillsShCleanupPlan {
   /// Problems found while planning: an unreadable lock, or entries skipped
   /// because removing them would not be safe.
   final List<String> warnings;
+
+  /// Agent skill folders that hold nothing but links this plan removes, so
+  /// they will be empty afterwards and are removed too (skills.sh creates
+  /// them for agents the user may not have; left empty, they would make
+  /// those agents look installed).
+  final List<String> emptiedDirectories;
 
   /// Whether there is nothing to clean up.
   bool get isEmpty => skills.isEmpty;
@@ -251,6 +258,18 @@ class SkillsShCleanupPlan {
         }
       }
     }
+    if (emptiedDirectories.isNotEmpty) {
+      final count = emptiedDirectories.length;
+      lines.add(
+        '$count empty agent skill ${count == 1 ? 'folder' : 'folders'} '
+        'will be removed.',
+      );
+      if (verbose) {
+        for (final dir in emptiedDirectories) {
+          lines.add('      $dir');
+        }
+      }
+    }
     return lines;
   }
 
@@ -269,6 +288,7 @@ class SkillsShCleanupResult {
     this.removedSkills = const [],
     this.unlinkedLinks = const [],
     this.deletedCanonicals = const [],
+    this.removedDirectories = const [],
     this.warnings = const [],
   });
 
@@ -281,6 +301,9 @@ class SkillsShCleanupResult {
 
   /// Canonical `~/.agents/skills/<name>` entries that were removed.
   final List<String> deletedCanonicals;
+
+  /// Agent skill folders left empty by the unlinking, which were removed.
+  final List<String> removedDirectories;
 
   /// Per-item failures and skips; every other item was still processed.
   final List<String> warnings;
@@ -371,6 +394,7 @@ class SkillsShCleaner {
     final removedSkills = <String>[];
     final unlinked = <String>[];
     final deletedCanonicals = <String>[];
+    final touchedDirectories = LinkedHashSet<String>();
 
     for (final planned in plan.skills) {
       final now = currentByPath[planned.canonicalPath];
@@ -398,6 +422,7 @@ class SkillsShCleaner {
         try {
           Link(link).deleteSync();
           unlinked.add(link);
+          touchedDirectories.add(p.dirname(link));
         } on FileSystemException catch (e) {
           complete = false;
           warnings.add('Could not remove link $link: ${e.message}');
@@ -436,6 +461,18 @@ class SkillsShCleaner {
       }
     }
 
+    final removedDirectories = <String>[];
+    for (final dir in touchedDirectories) {
+      if (!_isEmptyAgentFolder(dir, const {})) continue;
+      try {
+        // Non-recursive: fails rather than delete anything that appeared.
+        Directory(dir).deleteSync();
+        removedDirectories.add(dir);
+      } on FileSystemException catch (e) {
+        warnings.add('Could not remove empty folder $dir: ${e.message}');
+      }
+    }
+
     if (removedSkills.isNotEmpty) {
       try {
         _writeLock(current.lock!);
@@ -448,8 +485,26 @@ class SkillsShCleaner {
       removedSkills: removedSkills,
       unlinkedLinks: unlinked,
       deletedCanonicals: deletedCanonicals,
+      removedDirectories: removedDirectories,
       warnings: warnings,
     );
+  }
+
+  /// Whether [dir] is a real agent skill folder (never the canonical
+  /// `~/.agents/skills` itself) that holds nothing besides [removing].
+  bool _isEmptyAgentFolder(String dir, Set<String> removing) {
+    if (p.equals(dir, canonicalSkillsDirectory)) return false;
+    if (FileSystemEntity.typeSync(dir, followLinks: false) !=
+        FileSystemEntityType.directory) {
+      return false;
+    }
+    try {
+      return Directory(dir)
+          .listSync(followLinks: false)
+          .every((entity) => removing.contains(entity.path));
+    } on FileSystemException {
+      return false;
+    }
   }
 
   /// Reads the lock and builds the plan; shared by [plan] and [apply].
@@ -529,8 +584,19 @@ class SkillsShCleaner {
       );
     }
 
+    final removing = {for (final skill in skills) ...skill.links};
+    final emptied = [
+      for (final dir in LinkedHashSet.of(removing.map(p.dirname)))
+        if (_isEmptyAgentFolder(dir, removing)) dir,
+    ];
+
     return _Discovery(
-      SkillsShCleanupPlan(lockPath: path, skills: skills, warnings: warnings),
+      SkillsShCleanupPlan(
+        lockPath: path,
+        skills: skills,
+        warnings: warnings,
+        emptiedDirectories: emptied,
+      ),
       lock: lock,
       lockSkills: lockSkills,
     );
@@ -589,25 +655,10 @@ class SkillsShCleaner {
     } on FileSystemException catch (e) {
       return 'its SKILL.md could not be read (${e.message})';
     }
-    final name = _frontmatterName(content);
+    final name = frontmatterName(content);
     if (name == null) return 'its SKILL.md has no frontmatter name';
     if (skillsShSanitizeName(name) != folder) {
       return 'its SKILL.md belongs to a different skill ("$name")';
-    }
-    return null;
-  }
-
-  /// The `name` field of a markdown file's YAML frontmatter, if any.
-  static String? _frontmatterName(String content) {
-    final match = RegExp(r'^﻿?---\r?\n([\s\S]*?)\r?\n---').firstMatch(content);
-    if (match == null) return null;
-    try {
-      final yaml = loadYaml(match.group(1)!);
-      if (yaml is YamlMap && yaml['name'] is String) {
-        return yaml['name'] as String;
-      }
-    } on YamlException {
-      // Unparseable frontmatter is treated like a missing name.
     }
     return null;
   }

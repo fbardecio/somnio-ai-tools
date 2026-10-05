@@ -1,6 +1,8 @@
 // coverage:ignore-file
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 import '../agents/agent_config.dart';
 import '../agents/agent_registry.dart';
 import 'platform_utils.dart';
@@ -24,6 +26,20 @@ class AgentInfo {
 /// All detection is driven by [AgentRegistry] — adding a new agent there
 /// automatically makes it discoverable here.
 class AgentDetector {
+  /// Whether [path] is a directory holding at least one entry besides
+  /// macOS `.DS_Store` metadata.
+  static bool hasContent(String path) {
+    final dir = Directory(path);
+    if (!dir.existsSync()) return false;
+    try {
+      return dir
+          .listSync(followLinks: false)
+          .any((entity) => p.basename(entity.path) != '.DS_Store');
+    } on FileSystemException {
+      return false;
+    }
+  }
+
   /// Detects all agents that have a binary (CLI agents).
   Future<Map<AgentConfig, AgentInfo>> detect() async {
     final results = <AgentConfig, AgentInfo>{};
@@ -59,11 +75,13 @@ class AgentDetector {
       }
     }
 
-    // Check if the install directory exists (installed but binary not in PATH)
+    // Check for a populated install directory (installed but binary not in
+    // PATH). An empty one does not count: skills.sh creates `<agent>/skills`
+    // folders for agents the user may never have installed.
     if (agent.installScope == InstallScope.global) {
       final home = PlatformUtils.homeDirectory;
       final installDir = agent.resolvedInstallPath(home: home);
-      if (Directory(installDir).existsSync()) {
+      if (hasContent(installDir)) {
         return AgentInfo(installed: true, path: installDir);
       }
     }

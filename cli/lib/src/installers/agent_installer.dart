@@ -100,7 +100,7 @@ class AgentInstaller extends Installer {
 
         // Write all files from the transform output.
         for (final entry in output.files.entries) {
-          _writeFile(p.join(baseDir, entry.key), entry.value);
+          _writeFile(baseDir, p.join(baseDir, entry.key), entry.value);
           ruleCount++;
           // Record every individual file for non-skillDir formats: some
           // (e.g. `global_workflows/`) are shared directories other skills
@@ -155,6 +155,7 @@ class AgentInstaller extends Installer {
     final rulesDir = p.join(bundleDir, 'references');
     for (final rule in rules) {
       _writeFile(
+        rulesBaseDir,
         p.join(rulesDir, '${rule.fileName}.md'),
         ClaudeTransformer.ruleToMarkdown(rule),
       );
@@ -165,6 +166,7 @@ class AgentInstaller extends Installer {
     // computes and the runner's prompts tell the AI to read.
     if (template != null && bundle.templatePath != null) {
       _writeFile(
+        rulesBaseDir,
         p.join(bundleDir, 'assets', p.basename(bundle.templatePath!)),
         template,
       );
@@ -257,10 +259,20 @@ class AgentInstaller extends Installer {
                 'user-invocable: true\n'
                 '---\n\n'
                 '$content';
-            _writeFile(p.join(baseDir, skill.name, 'SKILL.md'), skillMd);
+            // Same as audit bundles: start from a clean, real directory.
+            // Pruning unlinks a symlinked skill dir (e.g. one skills.sh put
+            // there) instead of writing through it into the shared copy, and
+            // drops files a content update renamed or removed.
+            _prune(p.join(baseDir, skill.name));
+            _writeFile(
+              baseDir,
+              p.join(baseDir, skill.name, 'SKILL.md'),
+              skillMd,
+            );
             _installAssetDirectories(skill, baseDir);
             for (final entry in refFiles.entries) {
               _writeFile(
+                baseDir,
                 p.join(baseDir, skill.name, 'references', entry.key),
                 entry.value,
               );
@@ -276,6 +288,7 @@ class AgentInstaller extends Installer {
           case InstallFormat.singleFile:
             // Cursor: single .md command file
             _writeFile(
+              baseDir,
               p.join(baseDir, '${skill.name}.md'),
               _withInlineReferences(content, refFiles),
             );
@@ -299,7 +312,7 @@ class AgentInstaller extends Installer {
                 '${_withInlineReferences(content, refFiles)}';
             final workflowPath =
                 p.join('global_workflows', 'somnio_$underscored.md');
-            _writeFile(p.join(baseDir, workflowPath), wrapped);
+            _writeFile(baseDir, p.join(baseDir, workflowPath), wrapped);
             // Only the specific file is recorded, never the
             // `global_workflows/` directory itself — it's shared with other
             // skills' workflow files, so it must never be deleted wholesale.
@@ -335,6 +348,7 @@ class AgentInstaller extends Installer {
               ..writeln()
               ..write(_withInlineReferences(content, refFiles));
             _writeFile(
+              baseDir,
               p.join(baseDir, '$underscored.md'),
               buffer.toString(),
             );
@@ -393,6 +407,7 @@ class AgentInstaller extends Installer {
         if (entity is! File) continue;
         final relativePath = p.relative(entity.path, from: sourceDir.path);
         _writeFile(
+          baseDir,
           p.join(baseDir, skill.name, dirName, relativePath),
           entity.readAsStringSync(),
         );
@@ -444,7 +459,32 @@ class AgentInstaller extends Installer {
     if (dir.existsSync()) dir.deleteSync(recursive: true);
   }
 
-  void _writeFile(String path, String content) {
+  /// Writes [content] to [path], which must lie inside the install [root].
+  ///
+  /// Guards every write against landing outside somnio's own files: a
+  /// symlink at [path] itself is unlinked (only the link) and replaced by a
+  /// real file, and a symlinked directory between [root] and [path] makes
+  /// the write fail rather than go through it into someone else's tree
+  /// (e.g. the shared `~/.agents/skills` copy skills.sh links to). [root]
+  /// itself may be a symlink — that is the user's own setup.
+  void _writeFile(String root, String path, String content) {
+    final relative = p.relative(path, from: root);
+    if (p.isAbsolute(relative) || p.split(relative).first == '..') {
+      throw ArgumentError.value(path, 'path', 'is outside $root');
+    }
+    final parts = p.split(relative);
+    var current = root;
+    for (final part in parts.take(parts.length - 1)) {
+      current = p.join(current, part);
+      if (FileSystemEntity.isLinkSync(current)) {
+        throw FileSystemException(
+          'Refusing to write through a symlinked directory',
+          current,
+        );
+      }
+    }
+    if (FileSystemEntity.isLinkSync(path)) Link(path).deleteSync();
+
     final file = File(path);
     file.parent.createSync(recursive: true);
     file.writeAsStringSync(content);

@@ -179,7 +179,8 @@ void main() {
       expect(agentDir.existsSync(), isFalse);
     });
 
-    test('skips bundles when the transformer returns skipped (workflow, '
+    test(
+        'skips bundles when the transformer returns skipped (workflow, '
         'no workflowPath)', () async {
       // workflow transformer skips bundles without a workflowPath.
       final bundle = _seedBundle(repoRoot);
@@ -275,8 +276,8 @@ void main() {
 
       expect(File(stale).existsSync(), isFalse);
       expect(
-        File(p.join(rulesPath, bundle.planSubDir, 'references',
-                'architecture.md'))
+        File(p.join(
+                rulesPath, bundle.planSubDir, 'references', 'architecture.md'))
             .existsSync(),
         isTrue,
       );
@@ -328,7 +329,8 @@ void main() {
         agentConfig: agentFor(format: InstallFormat.markdown),
       );
 
-      final result = await installer.install(bundles: [bad, _seedBundle(repoRoot)]);
+      final result =
+          await installer.install(bundles: [bad, _seedBundle(repoRoot)]);
 
       expect(result.failedCount, 1);
       expect(result.skillCount, 1);
@@ -388,11 +390,109 @@ void main() {
       );
     }
 
+    group('symlinked skill directory', () {
+      late Directory shared;
+      late String target;
+
+      setUp(() {
+        // skills.sh's shared copy, linked from the agent's skill folder.
+        shared =
+            Directory(p.join(tmp.path, 'agents', 'skills', 'workflow-builder'))
+              ..createSync(recursive: true);
+        File(p.join(shared.path, 'SKILL.md')).writeAsStringSync('shared');
+        target = p.join(tmp.path, 'install', 'workflow-builder');
+        Directory(p.dirname(target)).createSync(recursive: true);
+        Link(target).createSync(shared.path);
+      });
+
+      test('leaves the link target untouched', () {
+        final skill = seedWorkflow();
+        final installer = AgentInstaller(
+          logger: logger,
+          loader: loader,
+          agentConfig: agentFor(format: InstallFormat.skillDir),
+        );
+
+        installer.installWorkflowSkills([skill]);
+
+        expect(
+          File(p.join(shared.path, 'SKILL.md')).readAsStringSync(),
+          'shared',
+        );
+      });
+
+      test('replaces the link with a real directory', () {
+        final skill = seedWorkflow();
+        final installer = AgentInstaller(
+          logger: logger,
+          loader: loader,
+          agentConfig: agentFor(format: InstallFormat.skillDir),
+        );
+
+        installer.installWorkflowSkills([skill]);
+
+        expect(FileSystemEntity.isLinkSync(target), isFalse);
+        expect(File(p.join(target, 'SKILL.md')).existsSync(), isTrue);
+      });
+    });
+
+    test('drops files a previous install left in the skill directory', () {
+      final skill = seedWorkflow();
+      final stale = File(
+        p.join(tmp.path, 'install', 'workflow-builder', 'references', 'old.md'),
+      )..createSync(recursive: true);
+      final installer = AgentInstaller(
+        logger: logger,
+        loader: loader,
+        agentConfig: agentFor(format: InstallFormat.skillDir),
+      );
+
+      installer.installWorkflowSkills([skill]);
+
+      expect(stale.existsSync(), isFalse);
+    });
+
+    test('replaces a symlinked single-file install without following it', () {
+      final skill = seedWorkflow();
+      final outside = File(p.join(tmp.path, 'outside.md'))
+        ..writeAsStringSync('outside');
+      final linkPath = p.join(tmp.path, 'install', 'workflow-builder.md');
+      Directory(p.dirname(linkPath)).createSync(recursive: true);
+      Link(linkPath).createSync(outside.path);
+      final installer = AgentInstaller(
+        logger: logger,
+        loader: loader,
+        agentConfig: agentFor(format: InstallFormat.singleFile),
+      );
+
+      installer.installWorkflowSkills([skill]);
+
+      expect(outside.readAsStringSync(), 'outside');
+      expect(FileSystemEntity.isLinkSync(linkPath), isFalse);
+    });
+
+    test('refuses to write through a symlinked directory', () {
+      final skill = seedWorkflow();
+      final outside = Directory(p.join(tmp.path, 'outside'))..createSync();
+      final installDir = p.join(tmp.path, 'install');
+      Directory(installDir).createSync(recursive: true);
+      Link(p.join(installDir, 'global_workflows')).createSync(outside.path);
+      final installer = AgentInstaller(
+        logger: logger,
+        loader: loader,
+        agentConfig: agentFor(format: InstallFormat.workflow),
+      );
+
+      final counts = installer.installWorkflowSkillsDetailed([skill]);
+
+      expect(counts.failed, 1);
+      expect(outside.listSync(), isEmpty);
+    });
+
     test('logs an error and skips the skill when writing the file throws', () {
       final skill = seedWorkflow();
       // Make the install dir's parent a FILE so creating the output path throws.
-      final blocker = File(p.join(tmp.path, 'blocker'))
-        ..writeAsStringSync('x');
+      final blocker = File(p.join(tmp.path, 'blocker'))..writeAsStringSync('x');
       final installer = AgentInstaller(
         logger: logger,
         loader: loader,
@@ -702,8 +802,7 @@ void main() {
       expect(out, contains('Body.'));
     });
 
-    test('skillDir: copies assetDirectories verbatim alongside SKILL.md',
-        () {
+    test('skillDir: copies assetDirectories verbatim alongside SKILL.md', () {
       final skill = seedWorkflow(name: 'dora-metrics');
       _writeFile(repoRoot, 'skills/dora-metrics/scripts/dora_metrics.py',
           'print("hi")\n');
@@ -978,10 +1077,8 @@ void main() {
       final installDir = p.join(tmp.path, 'install');
       // File directly in install dir should NOT be counted for workflow.
       _writeFile(installDir, 'somnio_top.md', 'x');
-      _writeFile(
-          p.join(installDir, 'global_workflows'), 'somnio_a.md', 'a');
-      _writeFile(
-          p.join(installDir, 'global_workflows'), 'somnio_b.md', 'b');
+      _writeFile(p.join(installDir, 'global_workflows'), 'somnio_a.md', 'a');
+      _writeFile(p.join(installDir, 'global_workflows'), 'somnio_b.md', 'b');
 
       final installer = AgentInstaller(
         logger: logger,

@@ -840,6 +840,69 @@ void main() {
       });
     });
 
+    group('empty agent skill folders', () {
+      late String claudeSkills;
+      late String piSkills;
+
+      setUp(() {
+        _writeLock(lockPath, _lockWith({'fha': _entry('fha')}));
+        _canonical(home, 'fha');
+        claudeSkills = p.dirname(_relativeLink(home, '.claude/skills', 'fha'));
+        piSkills = p.dirname(_relativeLink(home, '.pi/agent/skills', 'fha'));
+        // Claude also holds a skill of the user's own.
+        Directory(p.join(claudeSkills, 'mine')).createSync();
+      });
+
+      test('are planned only when they hold nothing but planned links', () {
+        expect(cleaner().plan().emptiedDirectories, [piSkills]);
+      });
+
+      test('are removed once their links are gone', () {
+        final result = _applyAll(cleaner());
+
+        expect(result.removedDirectories, [piSkills]);
+        expect(Directory(piSkills).existsSync(), isFalse);
+      });
+
+      test('keep their parent directories', () {
+        _applyAll(cleaner());
+
+        expect(Directory(p.join(home, '.pi', 'agent')).existsSync(), isTrue);
+      });
+
+      test('are kept when they still hold other entries', () {
+        _applyAll(cleaner());
+
+        expect(Directory(claudeSkills).existsSync(), isTrue);
+      });
+
+      test('are kept when something appeared after planning', () {
+        final plan = cleaner().plan();
+        File(p.join(piSkills, 'new.md')).writeAsStringSync('x');
+
+        final result = cleaner().apply(plan);
+
+        expect(result.removedDirectories, isEmpty);
+      });
+
+      test(
+        'warn when an emptied folder cannot be removed',
+        () {
+          final pi = p.join(home, '.pi', 'agent');
+          final plan = cleaner().plan();
+          // Unlinking needs a writable folder; removing the folder needs a
+          // writable parent.
+          Process.runSync('chmod', ['555', pi]);
+          addTearDown(() => Process.runSync('chmod', ['755', pi]));
+
+          final result = cleaner().apply(plan);
+
+          expect(result.warnings.single, contains('Could not remove empty'));
+        },
+        testOn: 'posix',
+      );
+    });
+
     group('apply re-checks the confirmed plan', () {
       late String canonical;
       late String link;
@@ -987,6 +1050,45 @@ void main() {
           '    canonical: /c/file (not a directory, left untouched)',
           '    links:     0',
         ]);
+      });
+
+      test('lists emptied folders, with paths when verbose', () {
+        const plan = SkillsShCleanupPlan(
+          lockPath: '/lock',
+          skills: [
+            SkillsShSkillPlan(
+              name: 'a',
+              canonicalPath: '/c/a',
+              canonicalKind: CanonicalKind.directory,
+              links: ['/x/a'],
+            ),
+          ],
+          emptiedDirectories: ['/x', '/y'],
+        );
+
+        expect(plan.describe(verbose: true).sublist(6), [
+          '2 empty agent skill folders will be removed.',
+          '      /x',
+          '      /y',
+        ]);
+      });
+
+      test('uses singular wording for one emptied folder', () {
+        const plan = SkillsShCleanupPlan(
+          lockPath: '/lock',
+          skills: [
+            SkillsShSkillPlan(
+              name: 'a',
+              canonicalPath: '/c/a',
+              canonicalKind: CanonicalKind.directory,
+              links: ['/x/a'],
+            ),
+          ],
+          emptiedDirectories: ['/x'],
+        );
+
+        expect(plan.describe().last,
+            '1 empty agent skill folder will be removed.');
       });
 
       test('names the other lock entries that share a folder', () {

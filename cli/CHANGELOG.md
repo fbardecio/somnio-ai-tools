@@ -5,6 +5,22 @@ All notable changes to the Somnio CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.1] - 2026-10-05
+
+### Fixed
+
+- **Refreshing a workflow skill wrote through a skills.sh symlink into the shared copy.** When `~/.claude/skills/<workflow-skill>` was a symlink to `~/.agents/skills/<workflow-skill>` (skills.sh replaced a Somnio install) and the cleanup was declined, `somnio skills update` wrote Somnio's transformed `SKILL.md` into skills.sh's shared copy. Workflow skills in the `skillDir` format are now pruned before writing, like audit bundles: a symlinked skill folder is unlinked (never followed or deleted through) and replaced by a real directory, and files a previous install left behind are dropped. Every installer write is also guarded: a symlink at the file itself is unlinked and replaced, and a symlinked directory between the install root and the file makes that skill's install fail instead of writing through it.
+- **Empty agent skill folders made agents look installed.** skills.sh creates `<agent>/skills` folders for some 30 agents; after the cleanup they were left empty, and agent detection counted an existing install folder as an installed agent, so `somnio setup` installed into agents the user doesn't use. The cleanup now removes each agent skill folder it emptied (non-recursively; never parents, non-empty folders or `~/.agents/skills`), lists them in the plan and `--dry-run` ("N empty agent skill folders will be removed") and in `--verbose` output. Agent detection no longer treats an empty install folder (or one holding only `.DS_Store`) as an installed agent; the binary, detection paths and a populated install folder still count.
+- **`somnio skills update` run from the home directory refreshed everything twice**, because the project scope (`./.claude/skills`) resolved to the global folder. Locations are now de-duplicated by real path in `skills update` and `skills remove`.
+- **`somnio uninstall --skills` deleted anything named like a Somnio skill**, regardless of who installed it. Where a `.somnio-skills.json` manifest exists, the name-based sweep is skipped and only what the manifest records is removed. Without a manifest (pre-manifest installs), a matching entry is removed only when it looks like a Somnio install: a folder whose `SKILL.md` frontmatter `name` is the skill name, a symlink resolving inside the location (only the link is removed), or a plain file. Anything else is kept with a warning.
+
+### Changed
+
+- The cleanup explanation now reads "skills.sh copies of Somnio skills are not managed by the somnio CLI and go stale" instead of claiming `somnio skills update` never refreshes them.
+- `somnio skills update --dry-run` also lists what a real run would refresh: agent, scope, location and skill names.
+- `somnio uninstall --verbose` prints removed paths and warnings after the progress spinner stops, instead of interleaving with it.
+- `somnio setup` and `somnio uninstall` accept `-y` / `--yes` as well as `--force`.
+
 ## [3.2.0] - 2026-10-05
 
 ### Changed

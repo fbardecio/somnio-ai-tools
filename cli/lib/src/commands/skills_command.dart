@@ -19,6 +19,7 @@ import '../installers/skills_sh_cleanup_flow.dart';
 import '../utils/command_helpers.dart';
 import '../utils/platform_utils.dart';
 import '../utils/prompts.dart';
+import '../utils/real_path.dart';
 
 /// Top-level `somnio skills` command — manage installed skill bundles.
 ///
@@ -421,6 +422,7 @@ class _SkillsInstallCommand extends Command<int> {
 typedef _UpdateUnit = ({
   AgentConfig agent,
   InstallScope scope,
+  String location,
   SkillSelection selection,
 });
 
@@ -513,6 +515,7 @@ class _SkillsUpdateCommand extends Command<int> {
         verbose: _verbose,
         reinstalled: reinstalled,
       );
+      _printRefreshPlan(units);
       return ExitCode.success.code;
     }
 
@@ -589,6 +592,9 @@ class _SkillsUpdateCommand extends Command<int> {
         InstallScope.global,
         if (agent.supportsProjectScope) InstallScope.project,
       ];
+      // Run from the home directory, the project scope is the global one:
+      // refresh that location once, as global.
+      final seen = <String>{};
 
       for (final scope in scopes) {
         final dir = agent.resolvedScopedInstallPath(
@@ -596,6 +602,7 @@ class _SkillsUpdateCommand extends Command<int> {
           home: home,
           projectRoot: projectRoot,
         );
+        if (!seen.add(realPathOf(dir))) continue;
         final manifest = SkillManifest.load(dir);
         if (manifest.isEmpty) continue;
 
@@ -625,12 +632,35 @@ class _SkillsUpdateCommand extends Command<int> {
         units.add((
           agent: agent,
           scope: scope,
+          location: dir,
           selection: SkillSelection(audit, workflow),
         ));
       }
     }
 
     return units;
+  }
+
+  /// Lists what a real run would refresh, for `--dry-run`.
+  void _printRefreshPlan(List<_UpdateUnit> units) {
+    _logger.info('');
+    if (units.isEmpty) {
+      _logger.info('Would refresh: nothing (no somnio-installed skills found).');
+      return;
+    }
+    _logger.info('Would refresh:');
+    for (final unit in units) {
+      final names = CommandHelpers.skillNames(
+        unit.selection.audit,
+        unit.selection.workflow,
+      );
+      _logger
+        ..info(
+          '  ${unit.agent.displayName} (${_scopeLabel(unit.scope)})  '
+          '${unit.location}',
+        )
+        ..info('    ${names.join(', ')}');
+    }
   }
 
   void _warnOrphaned(AgentConfig agent, InstallScope scope, String skill) {
@@ -812,6 +842,9 @@ class _SkillsRemoveCommand extends Command<int> {
     final candidates = <_RemoveCandidate>[];
 
     for (final agent in agents) {
+      // Global and project can be the same directory (run from home); its
+      // manifest must be processed once.
+      final seen = <String>{};
       for (final scope in scopes) {
         if (scope == InstallScope.project && !agent.supportsProjectScope) {
           continue;
@@ -821,6 +854,7 @@ class _SkillsRemoveCommand extends Command<int> {
           home: home,
           projectRoot: projectRoot,
         );
+        if (!seen.add(realPathOf(dir))) continue;
         final manifest = SkillManifest.load(dir);
         for (final entry in manifest.entries) {
           candidates.add((
