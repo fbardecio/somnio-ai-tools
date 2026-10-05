@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -29,7 +30,7 @@ void main() {
         p.join(home.path, '.cursor', 'somnio_rules', 'flutter', 'rules.md'),
       );
 
-      removeAgentInstalls(home: home.path);
+      removeAgentInstalls(home: home.path, environment: const {});
 
       expect(
         Directory(p.join(home.path, '.cursor', 'somnio_rules')).existsSync(),
@@ -54,7 +55,7 @@ void main() {
         _writeFile(p.join(home.path, '.claude', 'skills', name, 'SKILL.md'));
       }
 
-      removeAgentInstalls(home: home.path);
+      removeAgentInstalls(home: home.path, environment: const {});
 
       for (final name in const [
         'python-health-audit',
@@ -75,7 +76,7 @@ void main() {
         _writeFile(p.join(home.path, '.claude', 'skills', name, 'SKILL.md'));
       }
 
-      removeAgentInstalls(home: home.path);
+      removeAgentInstalls(home: home.path, environment: const {});
 
       for (final name in const ['somnio-fh', 'somnio-rh', 'somnio-rp']) {
         expect(
@@ -93,7 +94,7 @@ void main() {
         ..createSync(recursive: true);
       Link(p.join(skillsDir.path, 'security-audit')).createSync(target.path);
 
-      removeAgentInstalls(home: home.path);
+      removeAgentInstalls(home: home.path, environment: const {});
 
       expect(
         Link(p.join(skillsDir.path, 'security-audit')).existsSync(),
@@ -102,18 +103,68 @@ void main() {
       expect(target.existsSync(), isTrue, reason: 'symlink target is not ours');
     });
 
-    test('removes skills from the skills.sh canonical ~/.agents/skills', () {
+    test('removes Somnio skills recorded in the skills.sh lock', () {
+      _writeFile(
+        p.join(home.path, '.agents', '.skill-lock.json'),
+        jsonEncode({
+          'version': 3,
+          'skills': {
+            'security-audit': {'source': 'somnio-software/somnio-ai-tools'},
+          },
+        }),
+      );
       _writeFile(
         p.join(home.path, '.agents', 'skills', 'security-audit', 'SKILL.md'),
+        '---\nname: security-audit\n---\n',
       );
 
-      removeAgentInstalls(home: home.path);
+      removeAgentInstalls(home: home.path, environment: const {});
 
       expect(
         Directory(p.join(home.path, '.agents', 'skills', 'security-audit'))
             .existsSync(),
         isFalse,
       );
+    });
+
+    test('keeps ~/.agents/skills copies the skills.sh lock does not own', () {
+      final canonical =
+          p.join(home.path, '.agents', 'skills', 'security-audit', 'SKILL.md');
+      _writeFile(canonical);
+
+      removeAgentInstalls(home: home.path, environment: const {});
+
+      expect(File(canonical).existsSync(), isTrue);
+    });
+
+    test('reports skills.sh removals and warnings', () {
+      _writeFile(
+        p.join(home.path, '.agents', '.skill-lock.json'),
+        jsonEncode({
+          'version': 3,
+          'skills': {
+            'fha': {'source': 'somnio-software/somnio-ai-tools'},
+            'odd': {'source': 'somnio-software/somnio-ai-tools'},
+          },
+        }),
+      );
+      _writeFile(
+        p.join(home.path, '.agents', 'skills', 'fha', 'SKILL.md'),
+        '---\nname: fha\n---\n',
+      );
+      _writeFile(p.join(home.path, '.agents', 'skills', 'odd'));
+      final removed = <String>[];
+      final warnings = <String>[];
+
+      removeAgentInstalls(
+        home: home.path,
+        environment: const {},
+        onRemoved: removed.add,
+        onWarning: warnings.add,
+      );
+
+      expect(removed, contains(contains('Removed skills.sh copy')));
+      expect(warnings, [contains('not a directory')]);
     });
 
     test('removes Antigravity workflows nested under global_workflows/', () {
@@ -125,7 +176,7 @@ void main() {
         p.join(home.path, '.gemini', 'antigravity', 'somnio_rules', 'r.md'),
       );
 
-      removeAgentInstalls(home: home.path);
+      removeAgentInstalls(home: home.path, environment: const {});
 
       expect(
         File(p.join(home.path, '.gemini', 'antigravity', 'global_workflows',
@@ -146,7 +197,7 @@ void main() {
       );
       _writeFile(p.join(home.path, '.gemini', 'somnio_rules', 'r.md'));
 
-      removeAgentInstalls(home: home.path);
+      removeAgentInstalls(home: home.path, environment: const {});
 
       expect(
         File(p.join(home.path, '.gemini', 'skills', 'security_audit.md'))
@@ -170,7 +221,7 @@ void main() {
         _writeFile(f, 'user content');
       }
 
-      removeAgentInstalls(home: home.path);
+      removeAgentInstalls(home: home.path, environment: const {});
 
       for (final f in userFiles) {
         expect(
@@ -183,7 +234,7 @@ void main() {
 
     test('reports whether anything was removed', () {
       expect(
-        removeAgentInstalls(home: home.path),
+        removeAgentInstalls(home: home.path, environment: const {}),
         isFalse,
         reason: 'nothing installed under an empty home',
       );
@@ -192,7 +243,7 @@ void main() {
         p.join(home.path, '.claude', 'skills', 'security-audit', 'SKILL.md'),
       );
 
-      expect(removeAgentInstalls(home: home.path), isTrue);
+      expect(removeAgentInstalls(home: home.path, environment: const {}), isTrue);
     });
   });
 

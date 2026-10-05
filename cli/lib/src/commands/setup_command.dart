@@ -1,22 +1,22 @@
 // coverage:ignore-file
-import 'dart:io';
-
 import 'package:args/command_runner.dart';
 import 'package:mason_logger/mason_logger.dart';
 
-import '../agents/agent_config.dart';
 import '../content/skill_registry.dart';
-import '../installers/agent_installer.dart';
-import '../utils/agent_detector.dart';
+import '../installers/skills_sh_cleaner.dart';
+import '../installers/skills_sh_cleanup_flow.dart';
 import '../utils/cli_installer.dart';
 import '../utils/command_helpers.dart';
+import '../utils/prompts.dart';
 
 /// Primary installation command.
 ///
-/// Installs Somnio skills via `npx skills add` (skills.sh) which supports
-/// 40+ AI agents. Falls back to the built-in installer if npx is unavailable.
+/// Installs Somnio skills to every detected agent with the built-in,
+/// manifest-tracked installer, so `somnio skills update` can refresh them.
 ///
-/// Optionally detects and installs missing AI CLIs first.
+/// Optionally detects and installs missing AI CLIs first. Before installing
+/// it offers to remove Somnio skills a previous skills.sh install left in
+/// the global scope (see [SkillsShCleaner]); `--force` skips that prompt.
 class SetupCommand extends Command<int> {
   SetupCommand({required Logger logger}) : _logger = logger {
     argParser
@@ -30,56 +30,83 @@ class SetupCommand extends Command<int> {
         help: 'Skip CLI detection and installation.',
       )
       ..addFlag(
-        'legacy',
-        help: 'Use built-in installer instead of skills.sh.',
-      )
-      ..addFlag(
         'verbose',
         abbr: 'v',
-        help: 'Show detailed output for each step.',
+        help: 'Show detailed output for each step, including every '
+            'skills.sh path removed.',
+        negatable: false,
+      )
+      // Deprecated no-op kept so existing scripts don't break: the built-in
+      // installer is now the only one.
+      ..addFlag(
+        'legacy',
+        hide: true,
         negatable: false,
       );
   }
 
   final Logger _logger;
 
-  /// GitHub repo for skills.sh installation.
-  static const _skillsRepo = 'somnio-software/somnio-ai-tools';
-
   @override
   String get name => 'setup';
 
   @override
-  String get description =>
-      'Install Somnio skills to all AI agents via skills.sh.\n'
+  String get description => 'Install Somnio skills to all detected AI agents.\n'
       '\n'
-      'Uses `npx skills add` to install skills globally across all\n'
-      'detected agents (Claude Code, Cursor, Codex, Gemini CLI, etc.).\n'
-      'Falls back to built-in installer if npx is unavailable.';
+      'Installs every skill globally with the built-in installer and\n'
+      'records it in .somnio-skills.json, so "somnio skills update" keeps\n'
+      'it current. Somnio skills previously installed by skills.sh\n'
+      '(npx skills add) are removed first, after confirmation.';
 
   @override
   Future<int> run() async {
     final force = argResults!['force'] as bool;
     final skipCli = argResults!['skip-cli'] as bool;
-    final useLegacy = argResults!['legacy'] as bool;
     final verbose = argResults!['verbose'] as bool;
+
+    if (argResults!['legacy'] as bool) {
+      _logger.warn(
+        '--legacy is deprecated and has no effect: setup always uses the '
+        'built-in installer.',
+      );
+    }
 
     // ── Step 1: Optional CLI detection & installation ──────────────
     if (!skipCli) {
       await _detectAndInstallClis(force);
     }
 
-    // ── Step 2: Install skills ─────────────────────────────────────
-    if (useLegacy) {
-      _logger.info('');
-      _logger.info(
-        '${lightCyan.wrap('Installing')}  Using built-in installer...',
-      );
-      _logger.info('');
-      return CommandHelpers.installToDetectedAgents(_logger);
+    // ── Step 2: Install skills ──────────────────────────────────────
+    final step = skipCli ? 'Step 1/1' : 'Step 2/2';
+    _logger.info('');
+    _logger.info('${lightCyan.wrap(step)}  Installing skills...');
+
+    // Only clean up skills.sh installs once we know the install can go
+    // ahead: removing them and then failing would leave no skills at all.
+    final agents = await CommandHelpers.detectInstallTargets(_logger);
+    if (agents.isEmpty) return ExitCode.software.code;
+
+    final ResolvedContent content;
+    try {
+      content = await CommandHelpers.resolveContent();
+    } catch (e) {
+      _logger.err('$e');
+      return ExitCode.software.code;
     }
 
-    return _installViaSkillsSh(force, verbose: verbose);
+    runSkillsShCleanup(
+      logger: _logger,
+      cleaner: SkillsShCleaner(),
+      assumeYes: force,
+      interactive: Prompts.isInteractive,
+      verbose: verbose,
+      reinstalled: CommandHelpers.skillNames(
+        content.bundles,
+        SkillRegistry.workflowSkills,
+      ),
+    );
+
+    return CommandHelpers.installAllSkills(_logger, agents, content);
   }
 
   /// Detects installed AI CLIs and offers to install missing ones.
@@ -147,158 +174,5 @@ class SetupCommand extends Command<int> {
       _logger.success('  All CLIs already installed!');
       _logger.info('');
     }
-  }
-
-  /// Installs skills via `npx skills add` (skills.sh).
-  ///
-  /// Falls back to built-in installer if npx is not available.
-  Future<int> _installViaSkillsSh(bool force, {bool verbose = false}) async {
-    final installProgress = _logger.progress('Installing skills via skills.sh');
-
-    // Check if npx is available
-    final npxPath = await _whichNpx();
-    if (npxPath == null) {
-      installProgress.fail('npx not found — falling back to built-in installer');
-      _logger.info(
-        'To use skills.sh, install Node.js: https://nodejs.org',
-      );
-      _logger.info('');
-      return CommandHelpers.installToDetectedAgents(_logger);
-    }
-
-    // Build the npx skills add command
-    final args = <String>[
-      'skills',
-      'add',
-      _skillsRepo,
-      '-g', // global install
-      '--all', // all skills + all agents
-    ];
-
-    if (force) {
-      args.add('-y'); // skip prompts
-    }
-
-    if (verbose) {
-      installProgress.complete('Running: npx ${args.join(' ')}');
-      _logger.info('');
-    }
-
-    // Execute npx skills add
-    final result = await Process.run(
-      'npx',
-      args,
-      environment: Platform.environment,
-      runInShell: true,
-    );
-
-    if (verbose) {
-      final stdout = (result.stdout as String).trim();
-      if (stdout.isNotEmpty) {
-        final clean = stdout.replaceAll(RegExp(r'\x1B\[[0-9;]*[a-zA-Z]'), '');
-        for (final line in clean.split('\n')) {
-          if (line.trim().isNotEmpty) {
-            _logger.info('  $line');
-          }
-        }
-      }
-    }
-
-    if (result.exitCode != 0) {
-      final stderr = (result.stderr as String).trim();
-      if (stderr.isNotEmpty) {
-        _logger.err('skills.sh error: $stderr');
-      }
-      if (!verbose) {
-        installProgress.fail('skills.sh failed — falling back to built-in installer');
-      }
-      _logger.info('');
-      return CommandHelpers.installToDetectedAgents(_logger);
-    }
-
-    if (!verbose) installProgress.complete('Skills installed');
-
-    // skills.sh only covers Claude/Cursor. Install to the remaining agents
-    // via the built-in installer.
-    final failed = await _installNonSkillsShAgents();
-
-    _logger.info('');
-    if (failed > 0) {
-      _logger.err('Setup finished with $failed failed install(s).');
-      _logger.info('');
-      CommandHelpers.printNextSteps(_logger);
-      return ExitCode.software.code;
-    }
-
-    _logger.success('Skills installed via skills.sh!');
-    _logger.info('');
-
-    CommandHelpers.printNextSteps(_logger);
-
-    return ExitCode.success.code;
-  }
-
-  /// Installs skills to agents that skills.sh does not cover.
-  ///
-  /// skills.sh only covers Claude and Cursor. Any agent with its own
-  /// [AgentConfig.executionRulesPath] (or [InstallFormat.workflow], e.g.
-  /// Antigravity) needs the built-in installer to get its execution rules
-  /// written. Returns the total number of failed installs.
-  Future<int> _installNonSkillsShAgents() async {
-    final detector = AgentDetector();
-    final agents = await detector.detect();
-
-    final agentsToInstall = agents.entries
-        .where(
-          (e) =>
-              e.value.installed &&
-              (e.key.installFormat == InstallFormat.workflow ||
-                  e.key.executionRulesPath != null),
-        )
-        .map((e) => e.key)
-        .toList();
-
-    if (agentsToInstall.isEmpty) return 0;
-
-    final content = await CommandHelpers.resolveContent();
-    var totalFailed = 0;
-
-    for (final agentConfig in agentsToInstall) {
-      final progress = _logger.progress(agentConfig.displayName);
-
-      final installer = AgentInstaller(
-        logger: _logger,
-        loader: content.loader,
-        agentConfig: agentConfig,
-      );
-      final result = await installer.install(bundles: content.bundles);
-      final wf = installer.installWorkflowSkillsDetailed(
-        SkillRegistry.workflowSkills,
-      );
-      totalFailed += result.failedCount + wf.failed;
-
-      progress.complete(
-        '${agentConfig.displayName}  '
-        '${CommandHelpers.installSummary(result, agentConfig, extraCount: wf.installed)}',
-      );
-    }
-
-    return totalFailed;
-  }
-
-  /// Checks if npx is available in PATH.
-  Future<String?> _whichNpx() async {
-    try {
-      final result = await Process.run(
-        'which',
-        ['npx'],
-        runInShell: true,
-      );
-      if (result.exitCode == 0) {
-        final path = (result.stdout as String).trim();
-        return path.isNotEmpty ? path : null;
-      }
-    } catch (_) {}
-    return null;
   }
 }

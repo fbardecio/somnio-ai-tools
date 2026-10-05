@@ -27,7 +27,7 @@ somnio -q status      # Quiet mode (suppress banner)
 
 | Command | Description |
 |---------|-------------|
-| `somnio setup` | Detect AI CLIs, install missing ones, install skills via skills.sh |
+| `somnio setup` | Detect AI CLIs, install missing ones, install skills to every detected agent |
 | `somnio hooks` | Install Claude Code hooks (e.g. the work-log Stop hook) |
 | `somnio run <name-or-alias>` | Execute a multi-step audit from the target project directory |
 | `somnio install` | Install skills to a specific agent or all agents |
@@ -68,21 +68,23 @@ What it does:
 
 ### somnio setup
 
-Primary installation command. Detects AI CLIs, installs missing ones, then installs all skills via `npx skills add`.
+Primary installation command. Detects AI CLIs, installs missing ones, then installs every skill globally to each detected agent with the CLI's own installer. Every install is recorded in the `.somnio-skills.json` manifest, so `somnio skills update` keeps it current. Before installing it offers to remove Somnio skills a previous skills.sh install left behind — see [Cleanup of skills.sh installs](#cleanup-of-skillssh-installs).
 
 ```bash
 somnio setup              # Full wizard
 somnio setup --skip-cli   # Skip CLI detection
-somnio setup --force      # Skip all prompts
-somnio setup --legacy     # Use built-in installer instead of skills.sh
+somnio setup --force      # Skip all prompts, including the skills.sh cleanup
 ```
 
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--force` | `-f` | Skip all confirmation prompts |
 | `--skip-cli` | | Skip CLI detection and installation |
-| `--legacy` | | Use built-in installer instead of skills.sh |
-| `--verbose` | `-v` | Show detailed output (npx stdout, file-by-file progress) |
+| `--verbose` | `-v` | Show detailed output, including every skills.sh path removed |
+
+> `--legacy` is deprecated since 3.2.0: it is hidden, has no effect and prints a warning, because the built-in installer is now the only one.
+
+Setup detects agents and resolves the skill content first; the skills.sh cleanup only runs once it knows the install can go ahead, so a machine with no agents (or a content error) keeps its skills.sh copies.
 
 ### somnio run
 
@@ -147,7 +149,10 @@ Install skills to a specific agent or all agents at once.
 ```bash
 somnio install --agent claude   # Install to Claude Code only
 somnio install --all            # Install to all detected agents
+somnio install --all --yes      # Also remove skills.sh copies without asking
 ```
+
+Like `somnio skills install`, it first offers to remove Somnio skills installed by skills.sh — see [Cleanup of skills.sh installs](#cleanup-of-skillssh-installs). `--yes` / `-y` skips that prompt.
 
 ### somnio add
 
@@ -168,6 +173,8 @@ Every skill the CLI writes is recorded in a `.somnio-skills.json` manifest at th
 
 **Scopes.** A skill can live in the agent's config directory (`--global`, e.g. `~/.claude/skills`) or inside the current project (`--project`, e.g. `./.claude/skills`).
 
+`install` and `update` first offer to remove Somnio skills installed by skills.sh — see [Cleanup of skills.sh installs](#cleanup-of-skillssh-installs).
+
 #### somnio skills install
 
 Choose which skills to install and where. Prompts interactively for agents, skills, and scope when no flags are given.
@@ -176,6 +183,7 @@ Choose which skills to install and where. Prompts interactively for agents, skil
 somnio skills install                                        # interactive
 somnio skills install --agent claude --all-skills --global
 somnio skills install --all-agents --project --skills flutter_health,security_audit
+somnio skills install --dry-run --verbose                    # show the skills.sh cleanup plan only
 ```
 
 | Flag | Short | Description |
@@ -186,6 +194,9 @@ somnio skills install --all-agents --project --skills flutter_health,security_au
 | `--all-skills` | | Install every skill without prompting |
 | `--global` | `-g` | Install into the agent's config dir. Mutually exclusive with `--project` |
 | `--project` | `-p` | Install into the current project directory |
+| `--yes` | `-y` | Remove Somnio skills installed by skills.sh without asking |
+| `--dry-run` | | Print the skills.sh cleanup plan and exit without removing or installing anything |
+| `--verbose` | `-v` | List every skills.sh link path in the cleanup plan |
 
 #### somnio skills update
 
@@ -195,12 +206,17 @@ Refresh already-installed skills in place, overwriting them with the shipped ver
 somnio skills update                # refresh everything installed
 somnio skills update --agent claude # refresh only Claude Code
 somnio skills update --verbose
+somnio skills update --dry-run --verbose   # show the skills.sh cleanup plan only
 ```
 
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--agent` | `-a` | Limit the refresh to a single agent |
-| `--verbose` | `-v` | Show the install directory for each refreshed location |
+| `--verbose` | `-v` | Show the install directory for each refreshed location and every skills.sh link path in the cleanup plan |
+| `--yes` | `-y` | Remove Somnio skills installed by skills.sh without asking |
+| `--dry-run` | | Print the skills.sh cleanup plan and exit without removing or refreshing anything |
+
+`update` only reinstalls what the discovered manifests cover. Any skills.sh skill outside them is listed as **"will be removed and NOT reinstalled"** (also with `--yes` and in `--dry-run`), and the cleanup prompt then defaults to *no*. Run `somnio skills install` afterwards to get those back.
 
 #### somnio skills remove
 
@@ -223,6 +239,25 @@ somnio skills remove --agent claude --project
 | `--verbose` | `-v` | Show each removed path |
 
 > Running non-interactively requires an explicit `--global` or `--project` — the command clears an entire scope, so it will not guess.
+
+### Cleanup of skills.sh installs
+
+The CLI does not use skills.sh (`npx skills add`). Somnio skills that skills.sh installed globally are not recorded in the `.somnio-skills.json` manifest, so `somnio skills update` could never refresh them: they go stale next to the Somnio-managed copies. `somnio setup`, `somnio install`, `somnio skills install` and `somnio skills update` therefore remove them once, after they know the install can go ahead and before installing anything (`somnio uninstall --skills` removes them too):
+
+1. Reads the skills.sh global lock — `$XDG_STATE_HOME/skills/.skill-lock.json` if `XDG_STATE_HOME` is set, otherwise `~/.agents/.skill-lock.json`. A missing lock means there is nothing to do; an unreadable or unrecognised lock is reported and **nothing is touched**.
+2. Picks every lock entry whose source is `somnio-software/somnio-ai-tools` — including skills that are no longer shipped. Third-party skills are never touched.
+3. For each one, removes the symlinks in agent skill folders (`~/.claude/skills`, `~/.pi/agent/skills`, …) that point at its canonical copy `~/.agents/skills/<name>`, then the canonical copy, then its lock entry. The rest of the lock is preserved.
+
+Safety rules:
+
+- Real directories in agent folders are never deleted, even when they share a skill's name (they may be hand-written, from another installer, or from skills.sh's copy mode), and a symlink pointing anywhere else is left alone. Only the link itself is ever removed; links are never followed.
+- A Somnio entry whose folder name (after skills.sh's name sanitising) is shared with a third-party lock entry is skipped entirely, as is one whose canonical `SKILL.md` declares a different `name`. Their lock entries are kept and a warning is shown.
+- Agent folders that are themselves symlinks (e.g. `~/.claude` → `~/dotfiles/claude`) are handled: links are matched both as written and at the folder's real path. If `~/.agents/skills` is itself a symlink, the canonical copy is removed at its real location. A symlinked lock file is rewritten at its target and the symlink is kept.
+- What gets removed is exactly the plan that was shown: every item is re-checked right before removal, and anything that changed in between is skipped with a warning.
+
+The commands list what will be removed (skills, canonical copies, number of links), flag any skill the command will not reinstall, and ask before removing anything. The question states that the removal is global, across all agents; it defaults to *yes* unless some skill would not be reinstalled. `--yes` (`--force` for `setup`) skips the question — the not-reinstalled list is still printed. Without a terminal to ask on and without that flag, the cleanup is skipped with a warning; declining also skips it. Either way the install or update then continues normally. `--dry-run` (on `skills install` and `skills update`) only prints the plan — with `--verbose`, every link path — and exits without removing or installing anything.
+
+Only the global scope is cleaned. A project's `skills-lock.json` and `.agents/skills` may be committed to git, so project-scope skills.sh installs are left alone.
 
 ### somnio update
 
@@ -256,7 +291,7 @@ somnio uninstall --force      # Skip the confirmation prompt
 | `--force` | `-f` | Skip the confirmation prompt |
 | `--verbose` | `-v` | Show each removed file |
 
-When skills are removed it clears the global installs, the current project's installs, the `.somnio-skills.json` manifests, and the agent rules installed by `somnio rules install`. Deactivating a CLI that was not installed through `dart pub global` is treated as a no-op, not an error.
+When skills are removed it clears the global installs, the current project's installs, the `.somnio-skills.json` manifests, and the agent rules installed by `somnio rules install`. Somnio skills installed by skills.sh are removed through the same [cleanup](#cleanup-of-skillssh-installs) as the install commands, so only entries the skills.sh lock attributes to this repo go from `~/.agents/skills`, together with their agent links and lock entries. Deactivating a CLI that was not installed through `dart pub global` is treated as a no-op, not an error.
 
 > To remove skills without removing the CLI, use [`somnio skills remove`](#somnio-skills-remove) instead.
 

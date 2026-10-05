@@ -44,6 +44,8 @@ dart pub global activate -sgit https://github.com/somnio-software/somnio-ai-tool
 somnio setup
 ```
 
+The CLI installs skills with its own installer (not skills.sh) and offers to remove Somnio skills previously installed by skills.sh, so `somnio skills update` can keep everything current.
+
 </details>
 
 > [Full installation guide →](docs/installation.md)

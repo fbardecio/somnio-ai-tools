@@ -6,6 +6,7 @@ import '../agents/agent_registry.dart';
 import '../content/content_loader.dart';
 import '../content/skill_bundle.dart';
 import '../content/skill_registry.dart';
+import '../content/workflow_skill.dart';
 import '../installers/agent_installer.dart';
 import '../installers/installer.dart';
 import 'agent_detector.dart';
@@ -83,11 +84,19 @@ class CommandHelpers {
   static String titleCase(String text) =>
       text.isEmpty ? text : text[0].toUpperCase() + text.substring(1);
 
-  /// Detects agents, installs skills to all found, and prints a summary.
+  /// The installed names of [audit] and [workflow] skills — what a skill's
+  /// folder and lock entry are called once installed.
+  static Set<String> skillNames(
+    Iterable<SkillBundle> audit,
+    Iterable<WorkflowSkill> workflow,
+  ) =>
+      {for (final s in audit) s.name, for (final s in workflow) s.name};
+
+  /// Detects installed AI agents and prints one ✓/✗ line per agent.
   ///
-  /// Shared by `setup` (step 3) and `init`.
-  /// Returns the exit code.
-  static Future<int> installToDetectedAgents(Logger logger) async {
+  /// Returns the detected agents; when there are none, prints the
+  /// no-agents error and returns an empty list.
+  static Future<List<AgentConfig>> detectInstallTargets(Logger logger) async {
     final detectProgress = logger.progress('Detecting installed AI agents');
     final detector = AgentDetector();
     final agents = await detector.detect();
@@ -113,18 +122,25 @@ class CommandHelpers {
       }
     }
 
-    if (detectedAgents.isEmpty) {
-      printNoAgentsError(logger);
-      return ExitCode.software.code;
-    }
+    if (detectedAgents.isEmpty) printNoAgentsError(logger);
+    return detectedAgents;
+  }
 
-    final content = await resolveContent();
-
+  /// Installs every registered skill to [agents] and prints a summary.
+  ///
+  /// Used by `setup` after [detectInstallTargets]. Every install is recorded
+  /// in the agent's `.somnio-skills.json` manifest, so `somnio skills update`
+  /// can refresh it. Returns the exit code.
+  static Future<int> installAllSkills(
+    Logger logger,
+    List<AgentConfig> agents,
+    ResolvedContent content,
+  ) async {
     logger.info('');
     var totalSkills = 0;
     var totalFailed = 0;
 
-    for (final agentConfig in detectedAgents) {
+    for (final agentConfig in agents) {
       final progress = logger.progress(agentConfig.displayName);
 
       final installer = AgentInstaller(
@@ -149,12 +165,12 @@ class CommandHelpers {
     if (totalFailed > 0) {
       logger.err(
         'Done with errors: $totalFailed failed, $totalSkills skills '
-        'installed across ${detectedAgents.length} agents.',
+        'installed across ${agents.length} agents.',
       );
     } else {
       logger.success(
         'Done! Installed $totalSkills skills '
-        'across ${detectedAgents.length} agents.',
+        'across ${agents.length} agents.',
       );
     }
     logger.info('');

@@ -5,6 +5,30 @@ All notable changes to the Somnio CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-10-05
+
+### Changed
+
+- **`somnio setup` no longer uses skills.sh.** It used to run `npx skills add somnio-software/somnio-ai-tools -g --all`, whose installs are not recorded in Somnio's `.somnio-skills.json` manifest, so `somnio skills update` never refreshed them: they went stale and duplicated the Somnio-managed copies. `setup` now always installs with the built-in, manifest-tracked installer to every detected agent. It detects agents and resolves the skill content first (`CommandHelpers.detectInstallTargets` + `installAllSkills` replace `installToDetectedAgents`), so with no agents or a content error it stops before touching anything. The step label reads "Step 1/1" with `--skip-cli`. skills.sh remains a valid channel for people who don't use the CLI.
+- **`somnio uninstall --skills` no longer deletes `~/.agents/skills/<name>` by name.** It removes Somnio skills installed by skills.sh through the new cleaner instead, so only entries the skills.sh lock attributes to this repo go, together with their agent links and lock entries; directories the lock does not own are kept.
+
+### Added
+
+- **Cleanup of Somnio skills installed by skills.sh.** `somnio setup`, `somnio install`, `somnio skills install` and `somnio skills update` remove them once, after they know the install can go ahead and before installing. A new `SkillsShCleaner` (`cli/lib/src/installers/skills_sh_cleaner.dart`) reads skills.sh's global lock (`~/.agents/.skill-lock.json`, or `$XDG_STATE_HOME/skills/.skill-lock.json`), takes every entry whose source is `somnio-software/somnio-ai-tools` (including skills that are no longer shipped), and removes the agent-folder symlinks that resolve to the skill's canonical `~/.agents/skills/<name>` copy (dangling ones too), then the canonical copy, then the lock entry, preserving the rest of the lock in skills.sh's own format. Safety rules:
+  - Third-party skills, real directories in agent folders, and symlinks pointing elsewhere are never touched. Only links themselves are removed; they are never followed.
+  - A Somnio entry whose sanitised folder name is shared with a third-party lock entry, or whose canonical `SKILL.md` declares a different `name`, is skipped with a warning and its lock entry kept. Somnio keys that sanitise to the same folder (`Foo` / `foo`) are handled as one item.
+  - Symlinked agent folders (e.g. `~/.claude` → `~/dotfiles/claude`) are matched at their real path too. If `~/.agents/skills` is itself a symlink, the canonical copy is removed at its real location. A symlinked lock is rewritten at its target and the symlink kept.
+  - `apply(plan)` executes exactly the confirmed plan and re-checks every item first; anything that changed in between is skipped with a warning. A canonical path that is not a directory keeps its lock entry.
+  - An unreadable or unrecognised lock aborts the cleanup without changing anything.
+  - Only the global scope is cleaned, because project-level skills.sh files may be committed to git.
+
+  The commands list the skills, canonical copies and link counts, flag every skill the command will not reinstall ("will be removed and NOT reinstalled", also printed with `--yes` and in `--dry-run`), and ask whether to remove them globally from all agents. The prompt defaults to no when some skill would not be reinstalled (for example `skills update` with no Somnio-managed install for it). Without a terminal the cleanup is skipped with a warning and the install continues.
+- **`--yes` / `-y` and `--dry-run` on `somnio skills install` and `somnio skills update`, and `--yes` / `-y` on `somnio install`.** `--yes` skips the cleanup prompt (`setup` uses its existing `--force`). `--dry-run` prints the cleanup plan (per skill: canonical copy and number of links; with `--verbose`, every link path) and exits without removing or installing anything. `skills install` also gains `--verbose` / `-v` for that listing.
+
+### Deprecated
+
+- **`somnio setup --legacy`** is now hidden and has no effect beyond a deprecation warning, since the built-in installer is the only one. The `npx` detection and skills.sh fallback code in `setup_command.dart` was removed.
+
 ## [3.1.1] - 2026-10-02
 
 ### Fixed

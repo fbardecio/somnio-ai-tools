@@ -72,7 +72,7 @@ See [Plugin System](plugins.md) for details on each plugin.
 
 ## Option 3: Somnio CLI
 
-The Dart CLI includes a multi-step audit runner that orchestrates analysis across fresh AI contexts. It also installs skills via skills.sh under the hood.
+The Dart CLI includes a multi-step audit runner that orchestrates analysis across fresh AI contexts. It installs skills with its own installer — not skills.sh — and records them in a `.somnio-skills.json` manifest so `somnio skills update` can keep them current.
 
 ```bash
 dart pub global activate -sgit https://github.com/somnio-software/somnio-ai-tools.git --git-path cli
@@ -84,7 +84,9 @@ Then run the setup wizard:
 somnio setup
 ```
 
-`somnio setup` detects installed AI CLIs, offers to install missing ones, then runs `npx skills add` to install all skills globally.
+`somnio setup` detects installed AI CLIs, offers to install missing ones, then installs all skills globally to every detected agent.
+
+> **Switching from skills.sh?** Use one channel or the other. `somnio setup`, `somnio install`, `somnio skills install` and `somnio skills update` find the Somnio skills skills.sh installed globally and offer to remove them from all agents (after showing what will go and which of them the command will not reinstall), so they do not linger as stale duplicates. Third-party skills.sh skills are not touched. Preview with `somnio skills update --dry-run --verbose`; details in the [CLI Reference](cli.md#cleanup-of-skillssh-installs).
 
 ### Setup flags
 
@@ -92,7 +94,9 @@ somnio setup
 |------|-------|-------------|
 | `--force` | `-f` | Skip all confirmation prompts |
 | `--skip-cli` | | Skip CLI detection and installation |
-| `--legacy` | | Use built-in installer instead of skills.sh |
+| `--verbose` | `-v` | Show detailed output, including every skills.sh path removed |
+
+`--legacy` is deprecated: it is accepted but has no effect.
 
 See the [CLI Reference](cli.md) for full usage.
 

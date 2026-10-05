@@ -1,6 +1,7 @@
 // coverage:ignore-file
 import 'dart:io';
 
+import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
 import 'package:mason_logger/mason_logger.dart';
 import 'package:path/path.dart' as p;
@@ -13,6 +14,8 @@ import '../content/workflow_skill.dart';
 import '../installers/agent_installer.dart';
 import '../installers/interactive_install.dart';
 import '../installers/skill_manifest.dart';
+import '../installers/skills_sh_cleaner.dart';
+import '../installers/skills_sh_cleanup_flow.dart';
 import '../utils/command_helpers.dart';
 import '../utils/platform_utils.dart';
 import '../utils/prompts.dart';
@@ -24,6 +27,11 @@ import '../utils/prompts.dart';
 /// where they land (`install`), refreshing them in place (`update`), and
 /// tearing them down again (`remove`) — all scoped per agent and per
 /// [InstallScope].
+///
+/// `install` and `update` first offer to remove the Somnio skills a
+/// skills.sh (`npx skills add -g`) install left in the global scope — those
+/// copies are not in the manifest, so they would otherwise go stale next to
+/// the Somnio-managed ones. See [SkillsShCleaner].
 class SkillsCommand extends Command<int> {
   SkillsCommand({required Logger logger}) {
     addSubcommand(_SkillsInstallCommand(logger: logger));
@@ -65,6 +73,32 @@ WorkflowSkill? _findWorkflowByName(String name) {
   return null;
 }
 
+/// Adds the `--yes`, `--dry-run` and (optionally) `--verbose` flags that
+/// control the skills.sh cleanup `install` and `update` run first.
+void _addCleanupFlags(ArgParser parser, {required bool addVerbose}) {
+  parser
+    ..addFlag(
+      'yes',
+      abbr: 'y',
+      help: 'Remove Somnio skills installed by skills.sh without asking.',
+      negatable: false,
+    )
+    ..addFlag(
+      'dry-run',
+      help: 'Print the skills.sh cleanup plan and exit without removing or '
+          'installing anything.',
+      negatable: false,
+    );
+  if (addVerbose) {
+    parser.addFlag(
+      'verbose',
+      abbr: 'v',
+      help: 'List every skills.sh link path in the cleanup plan.',
+      negatable: false,
+    );
+  }
+}
+
 // ── Install subcommand ───────────────────────────────────────────────────────
 
 class _SkillsInstallCommand extends Command<int> {
@@ -101,6 +135,7 @@ class _SkillsInstallCommand extends Command<int> {
         help: 'Install in the current project directory. Mutually '
             'exclusive with --global.',
       );
+    _addCleanupFlags(argParser, addVerbose: true);
   }
 
   final Logger _logger;
@@ -113,11 +148,16 @@ class _SkillsInstallCommand extends Command<int> {
       'Install Somnio skills to one or more agents, globally or per '
       'project.\n'
       '\n'
+      'Before installing, offers to remove Somnio skills installed globally '
+      'by skills.sh (npx skills add), which Somnio cannot update. --yes '
+      'skips the prompt; --dry-run only prints what would be removed.\n'
+      '\n'
       'Examples:\n'
       '  somnio skills install                                       # interactive\n'
       '  somnio skills install --agent claude --all-skills --global\n'
       '  somnio skills install --all-agents --project '
-      '--skills flutter_health,security_audit';
+      '--skills flutter_health,security_audit\n'
+      '  somnio skills install --dry-run --verbose';
 
   @override
   Future<int> run() async {
@@ -127,6 +167,16 @@ class _SkillsInstallCommand extends Command<int> {
     if (forceGlobal && forceProject) {
       _logger.err('Use either --global or --project, not both.');
       return ExitCode.usage.code;
+    }
+
+    final verbose = argResults!['verbose'] as bool;
+    if (argResults!['dry-run'] as bool) {
+      printSkillsShCleanupDryRun(
+        logger: _logger,
+        cleaner: SkillsShCleaner(),
+        verbose: verbose,
+      );
+      return ExitCode.success.code;
     }
 
     final ResolvedContent content;
@@ -166,6 +216,18 @@ class _SkillsInstallCommand extends Command<int> {
       // else in this command group.
       scope = InstallScope.global;
     }
+
+    runSkillsShCleanup(
+      logger: _logger,
+      cleaner: SkillsShCleaner(),
+      assumeYes: argResults!['yes'] as bool,
+      interactive: Prompts.isInteractive,
+      verbose: verbose,
+      reinstalled: CommandHelpers.skillNames(
+        selection.audit,
+        selection.workflow,
+      ),
+    );
 
     return _installTo(agents, scope, selection, content);
   }
@@ -374,9 +436,11 @@ class _SkillsUpdateCommand extends Command<int> {
       ..addFlag(
         'verbose',
         abbr: 'v',
-        help: 'Show the install directory for each refreshed location.',
+        help: 'Show the install directory for each refreshed location and '
+            'every skills.sh link path in the cleanup plan.',
         negatable: false,
       );
+    _addCleanupFlags(argParser, addVerbose: false);
   }
 
   final Logger _logger;
@@ -392,15 +456,22 @@ class _SkillsUpdateCommand extends Command<int> {
       'every agent and refreshes whatever it finds there — it never '
       'installs anything new and never asks global-vs-project.\n'
       '\n'
+      'Before refreshing, offers to remove Somnio skills installed globally '
+      'by skills.sh (npx skills add), which this command cannot refresh. '
+      '--yes skips the prompt; --dry-run only prints what would be removed.\n'
+      '\n'
       'Examples:\n'
       '  somnio skills update                # refresh everything installed\n'
       '  somnio skills update --agent claude # refresh only Claude Code\n'
-      '  somnio skills update --verbose';
+      '  somnio skills update --verbose\n'
+      '  somnio skills update --dry-run --verbose';
 
   @override
   Future<int> run() async {
     final agentId = argResults!['agent'] as String?;
     _verbose = argResults!['verbose'] as bool;
+
+    final dryRun = argResults!['dry-run'] as bool;
 
     final ResolvedContent content;
     try {
@@ -424,7 +495,41 @@ class _SkillsUpdateCommand extends Command<int> {
 
     final units = _discoverUnits(agents);
 
+    // Only what the discovered manifests cover is refreshed below; any other
+    // skills.sh skill is removed without a replacement, which the cleanup
+    // lists explicitly and defaults to "no" for.
+    final reinstalled = {
+      for (final unit in units)
+        ...CommandHelpers.skillNames(
+          unit.selection.audit,
+          unit.selection.workflow,
+        ),
+    };
+
+    if (dryRun) {
+      printSkillsShCleanupDryRun(
+        logger: _logger,
+        cleaner: SkillsShCleaner(),
+        verbose: _verbose,
+        reinstalled: reinstalled,
+      );
+      return ExitCode.success.code;
+    }
+
+    final cleanup = runSkillsShCleanup(
+      logger: _logger,
+      cleaner: SkillsShCleaner(),
+      assumeYes: argResults!['yes'] as bool,
+      interactive: Prompts.isInteractive,
+      verbose: _verbose,
+      reinstalled: reinstalled,
+    );
+
     if (units.isEmpty) {
+      if (cleanup != null) {
+        _logger.info('Run "somnio skills install" to reinstall skills.');
+        return ExitCode.success.code;
+      }
       _logger.info('No somnio-installed skills found.');
       _logger.info('Run "somnio skills install" to install skills.');
       return ExitCode.success.code;

@@ -9,7 +9,7 @@ User
  │
  ├─ AI Agent (Claude Code, Cursor, Gemini, ...)
  │   │
- │   └─ Skills (installed via skills.sh or plugin)
+ │   └─ Skills (installed via skills.sh, plugin or the Somnio CLI)
  │       ├─ Audit skills → multi-step analysis → reports
  │       ├─ Utility skills → Git formatting, etc.
  │       └─ Workflow skills → custom pipelines
@@ -33,9 +33,9 @@ Skills can be invoked in two ways:
 |---------|--------|-------|
 | **skills.sh** | `npx skills add somnio-software/somnio-ai-tools` | 40+ agents |
 | **Claude Desktop App** | Cowork → Explore Plugins → Personal → add `somnio-software/somnio-ai-tools` | Claude Desktop App |
-| **Somnio CLI** | `somnio setup` (uses skills.sh internally) | All detected CLIs |
+| **Somnio CLI** | `somnio setup` (built-in, manifest-tracked installer) | All detected CLIs |
 
-All three channels install the same skills. The CLI additionally provides the multi-step audit runner.
+All three channels install the same skills. The CLI additionally provides the multi-step audit runner. The CLI does not use skills.sh; it removes Somnio skills a previous skills.sh install left in the global scope (see **skills.sh Cleaner** below).
 
 ---
 
@@ -78,6 +78,8 @@ cli/lib/src/
 **Installers** — Write transformed skills to agent-specific locations (`~/.claude/skills/`, `~/.cursor/commands/`, etc.). `AgentInstaller` resolves its target through `InstallScope`: `global` anchors the path template's `{home}` placeholder at the user's home directory, `project` anchors it at the current project root (`./.claude/skills/`). Only agents whose `installPath` is home-relative expose a project scope (`AgentConfig.supportsProjectScope`).
 
 **Skill Manifest** (`installers/skill_manifest.dart`) — Every install writes a `.somnio-skills.json` at the root of the target directory, recording the exact relative paths written per skill (tagged by which root they belong to — the install dir or the agent's separate `executionRulesPath`). One manifest per agent and scope. This is what makes `somnio skills update` and `somnio skills remove` exact: they act only on recorded paths instead of guessing ownership by matching names against the registry, so user-authored skills sharing a name are never modified or deleted. A missing or corrupt manifest reads as empty rather than throwing, so a bad file can't wedge the install commands.
+
+**skills.sh Cleaner** (`installers/skills_sh_cleaner.dart`) — skills.sh installs are not in the manifest, so `somnio skills update` cannot refresh them and they go stale next to the Somnio-managed copies. `SkillsShCleaner` reads skills.sh's global lock (`~/.agents/.skill-lock.json`, or under `$XDG_STATE_HOME`), takes every entry whose source is this repo, and removes the agent-folder symlinks that resolve to its canonical `~/.agents/skills/<name>` copy, the copy itself and the lock entry. It never deletes a real directory in an agent folder or a symlink pointing elsewhere, never follows a link, skips entries whose folder collides with a third-party entry or whose `SKILL.md` names another skill, and touches nothing if the lock cannot be parsed. `plan()` computes the result without side effects (backing `--dry-run`); `apply(plan)` executes exactly that confirmed plan, re-checking each item first. `setup`, `install`, `skills install` and `skills update` run it once, after confirmation and only once the install can proceed (`installers/skills_sh_cleanup_flow.dart`); `uninstall --skills` uses it in place of a name-based sweep of `~/.agents/skills`. Global scope only: project-level skills.sh files may be committed to git.
 
 **Command Installer** (`installers/command_installer.dart`) — Writes commands at folder scope (no transformer needed; commands are distributed as-is to `.claude/commands/` and `.cursor/commands/`). Backed by `somnio commands install`.
 
@@ -142,7 +144,7 @@ This means:
 
 **Data-driven agent registry** — Instead of if/else chains for each agent, a single `AgentConfig` model captures all agent differences (binary name, prompt style, install format, models). This makes the codebase scale linearly as new agents are added.
 
-**skills.sh integration** — Rather than maintaining 40+ agent installers internally, Somnio delegates to skills.sh for broad agent compatibility and focuses CLI effort on the audit runner.
+**Own installer, not skills.sh** — skills.sh stays a distribution channel for people who don't use the CLI, but the CLI installs with its own data-driven installer so every install is recorded in the manifest and can be updated and removed exactly. Mixing both left untracked, stale copies, which is why the CLI cleans up Somnio skills installed by skills.sh.
 
 **Markdown-based skills** — Skills are plain markdown files, not code. This makes them readable, editable, and portable across any agent that supports markdown-based skill systems.
 

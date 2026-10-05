@@ -12,6 +12,7 @@ import '../content/agent_rule.dart';
 import '../content/agent_rule_registry.dart';
 import '../installers/rules_installer.dart';
 import '../installers/skill_manifest.dart';
+import '../installers/skills_sh_cleaner.dart';
 import '../utils/package_resolver.dart';
 import '../utils/platform_utils.dart';
 import '../utils/prompts.dart';
@@ -109,6 +110,7 @@ class UninstallCommand extends Command<int> {
       var removedAnything = removeAgentInstalls(
         home: PlatformUtils.homeDirectory,
         onRemoved: _verbose ? _logger.info : null,
+        onWarning: _logger.warn,
       );
 
       // Covers what the home-scoped sweep above cannot: project-scoped
@@ -361,19 +363,37 @@ class UninstallCommand extends Command<int> {
 /// lives directly under its registered `installPath`; only the two agents that
 /// write outside it need their own remover.
 ///
+/// Somnio skills installed by skills.sh are removed first through
+/// [SkillsShCleaner], so only lock-owned Somnio entries go and their agent
+/// links and lock entries are cleaned consistently; [environment] supplies
+/// its env overrides (default: the process environment).
+///
 /// Returns `true` if anything was removed. [onRemoved] receives one message per
-/// removed entry, for `--verbose` output. Exposed at the top level (not as a
-/// class member) so it can be exercised directly in unit tests without spinning
-/// up the full command.
+/// removed entry, for `--verbose` output, and [onWarning] one per skills.sh
+/// item that could not be removed. Exposed at the top level (not as a class
+/// member) so it can be exercised directly in unit tests without spinning up
+/// the full command.
 bool removeAgentInstalls({
   required String home,
+  Map<String, String>? environment,
   void Function(String message)? onRemoved,
+  void Function(String message)? onWarning,
 }) {
-  var removed = false;
+  final cleaner = SkillsShCleaner(homeDirectory: home, environment: environment);
+  final skillsSh = cleaner.apply(cleaner.plan());
+  final skillsShPaths = [
+    ...skillsSh.unlinkedLinks,
+    ...skillsSh.deletedCanonicals,
+  ];
+  for (final path in skillsShPaths) {
+    onRemoved?.call('  Removed skills.sh copy: $path');
+  }
+  skillsSh.warnings.forEach(onWarning ?? (_) {});
+  var removed = skillsShPaths.isNotEmpty;
 
   for (final agent in AgentRegistry.installableAgents) {
     removed |= switch (agent.id) {
-      // Also writes skills.sh symlinks and the canonical ~/.agents/skills copy.
+      // Also removes leftover links named after a Somnio skill.
       'claude' => _removeClaudeInstall(home, onRemoved),
       // Workflows live one level down, in global_workflows/.
       'antigravity' => _removeAntigravityInstall(home, onRemoved) |
@@ -487,20 +507,6 @@ bool _removeClaudeInstall(String home, void Function(String)? onRemoved) {
       if (link.existsSync()) {
         link.deleteSync();
         onRemoved?.call('  Removed Claude symlink: $name');
-        removed = true;
-      }
-    }
-  }
-
-  // ~/.agents/skills/ is skills.sh's canonical location. It is cleaned
-  // independently: it outlives ~/.claude/skills/ when the symlinks are gone.
-  final agentsDir = Directory(p.join(home, '.agents', 'skills'));
-  if (agentsDir.existsSync()) {
-    for (final name in names) {
-      final dir = Directory(p.join(agentsDir.path, name));
-      if (dir.existsSync()) {
-        dir.deleteSync(recursive: true);
-        onRemoved?.call('  Removed agents registry: $name');
         removed = true;
       }
     }

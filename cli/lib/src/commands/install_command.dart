@@ -8,6 +8,8 @@ import '../content/skill_bundle.dart';
 import '../content/skill_registry.dart';
 import '../content/workflow_skill.dart';
 import '../installers/interactive_install.dart';
+import '../installers/skills_sh_cleaner.dart';
+import '../installers/skills_sh_cleanup_flow.dart';
 import '../utils/command_helpers.dart';
 import '../utils/prompts.dart';
 
@@ -19,6 +21,9 @@ import '../utils/prompts.dart';
 ///   somnio install --all
 ///   somnio install --agent claude --skills flutter_health,security_audit
 ///   somnio install --agent claude --all-skills
+///
+/// Before installing, offers to remove Somnio skills installed globally by
+/// skills.sh (see [SkillsShCleaner]); `--yes` skips that prompt.
 class InstallCommand extends Command<int> {
   InstallCommand({required Logger logger}) : _logger = logger {
     argParser
@@ -39,6 +44,12 @@ class InstallCommand extends Command<int> {
       ..addOption(
         'skills',
         help: 'Comma-separated skill ids/names to install (skips the wizard).',
+      )
+      ..addFlag(
+        'yes',
+        abbr: 'y',
+        help: 'Remove Somnio skills installed by skills.sh without asking.',
+        negatable: false,
       );
   }
 
@@ -80,7 +91,20 @@ class InstallCommand extends Command<int> {
       return ExitCode.success.code;
     }
 
-    // 3. Install the selected skills to each selected agent.
+    // 3. Now that the install can go ahead, offer to remove the Somnio
+    //    skills skills.sh installed, which Somnio cannot update.
+    runSkillsShCleanup(
+      logger: _logger,
+      cleaner: SkillsShCleaner(),
+      assumeYes: argResults!['yes'] as bool,
+      interactive: Prompts.isInteractive,
+      reinstalled: CommandHelpers.skillNames(
+        selection.audit,
+        selection.workflow,
+      ),
+    );
+
+    // 4. Install the selected skills to each selected agent.
     return flow.installToAgents(agents, content.loader, selection);
   }
 
