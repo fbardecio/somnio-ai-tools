@@ -134,7 +134,55 @@ String skillsShSanitizeName(String name) => name
     .replaceAll(RegExp('[^a-z0-9._]+'), '-')
     .replaceAll(RegExp(r'^[.\-]+|[.\-]+$'), '');
 
-/// What sits at a skill's canonical `~/.agents/skills/<name>` path.
+/// Whether [entry] is a symlink into skills.sh's canonical skills directory
+/// `<home>/.agents/skills` — i.e. content skills.sh manages, not evidence
+/// that the agent owning [entry]'s folder is installed.
+///
+/// Uses the same resolution as the cleanup: a relative target is resolved
+/// against the link's folder both as written and at its real path, and
+/// each result (also under its real parent) is compared with the canonical
+/// directory as written and at its real path. Never follows the link.
+bool isSkillsShLink(String entry, {required String home}) {
+  if (!FileSystemEntity.isLinkSync(entry)) return false;
+  final String target;
+  try {
+    target = Link(entry).targetSync();
+  } on FileSystemException {
+    return false;
+  }
+  final root = p.join(home, '.agents', 'skills');
+  final realRoot = _realDirectoryOf(root);
+  final roots = {p.normalize(root), if (realRoot != null) realRoot};
+  bool inRoot(String path) =>
+      roots.any((r) => p.equals(r, path) || p.isWithin(r, path));
+
+  final parent = p.dirname(entry);
+  final realParent = _realDirectoryOf(parent);
+  final resolved = p.isAbsolute(target)
+      ? [p.normalize(target)]
+      : [
+          for (final dir in {parent, if (realParent != null) realParent})
+            p.normalize(p.join(dir, target)),
+        ];
+  for (final path in resolved) {
+    if (inRoot(path)) return true;
+    final realDir = _realDirectoryOf(p.dirname(path));
+    if (realDir != null && inRoot(p.join(realDir, p.basename(path)))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// The real path of the directory [path], or `null` if it can't be resolved.
+String? _realDirectoryOf(String path) {
+  try {
+    return Directory(path).resolveSymbolicLinksSync();
+  } on FileSystemException {
+    return null;
+  }
+}
+
 /// What sits at a skill's canonical `~/.agents/skills/<name>` path.
 enum CanonicalKind {
   /// A real directory — deleted recursively.
@@ -623,7 +671,7 @@ class SkillsShCleaner {
     for (final dir in dirs) {
       final entry = p.join(dir, folder);
       if (!_linksTo(entry, canonical)) continue;
-      final realKey = p.join(_realDirectory(dir) ?? dir, folder);
+      final realKey = p.join(_realDirectoryOf(dir) ?? dir, folder);
       if (seen.add(realKey)) links.add(entry);
     }
     return links;
@@ -681,14 +729,14 @@ class SkillsShCleaner {
       return false;
     }
 
-    final canonicalParent = _realDirectory(p.dirname(canonical));
+    final canonicalParent = _realDirectoryOf(p.dirname(canonical));
     final canonicals = {
       p.normalize(canonical),
       if (canonicalParent != null)
         p.join(canonicalParent, p.basename(canonical)),
     };
     final parent = p.dirname(entry);
-    final realParent = _realDirectory(parent);
+    final realParent = _realDirectoryOf(parent);
     final resolved = p.isAbsolute(target)
         ? [p.normalize(target)]
         : [
@@ -698,23 +746,13 @@ class SkillsShCleaner {
     for (final path in resolved) {
       if (canonicals.contains(path)) return true;
       // Same entry reached through a symlinked parent directory.
-      final realDir = _realDirectory(p.dirname(path));
+      final realDir = _realDirectoryOf(p.dirname(path));
       if (realDir != null &&
           canonicals.contains(p.join(realDir, p.basename(path)))) {
         return true;
       }
     }
     return false;
-  }
-
-  /// The real path of the directory [path], or `null` if it can't be
-  /// resolved.
-  static String? _realDirectory(String path) {
-    try {
-      return Directory(path).resolveSymbolicLinksSync();
-    } on FileSystemException {
-      return null;
-    }
   }
 
   static bool _exists(String path) =>

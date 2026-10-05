@@ -5,6 +5,12 @@ All notable changes to the Somnio CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.2] - 2026-10-05
+
+### Fixed
+
+- **`somnio setup` still installed into agents that skills.sh had only linked into.** After `npx skills add somnio-software/somnio-ai-tools -g --all`, folders such as `~/.augment/skills`, `~/.codebuddy/skills` and `~/.qwen/skills` hold only skills.sh symlinks. Setup detects agents before the skills.sh cleanup runs, so those links made the agents look installed. The cleanup then emptied the folders and the install recreated them with 25 skills each. `AgentDetector.hasContent` now ignores symlinks that resolve into skills.sh's canonical `~/.agents/skills` (resolved the same way as the cleanup: relative or absolute targets, symlinked agent folders, symlinked `~/.agents/skills`), as well as `.DS_Store`. A folder holding only those counts as empty. This applies to every caller of the detector. The binary on `PATH`, detection paths and an install folder with real content still count. `AgentDetector` takes an optional home directory and binary lookup, for tests. The link check is a new shared `isSkillsShLink` in `skills_sh_cleaner.dart`.
+
 ## [3.2.1] - 2026-10-05
 
 ### Fixed
